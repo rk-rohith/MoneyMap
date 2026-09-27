@@ -19,7 +19,15 @@ CI (`.github/workflows/build-apk.yml`) runs tests, builds, lints and uploads the
 - **Spend**: log expenses by category, see where the budget went, browse past cycles, "paid for someone" → People.
 - **People**: money lent and borrowed, partial returns, reminders on due dates.
 - **Save**: pod balances (filled by ticking the salary-day routine, emptied by debt/pod-move ticks, topped up by returns) and goals with "save ₹X per cycle".
-- **Settings (⋮ → Settings & plan)**: edit salary, spending budget, every regular item (amount, day, type, start/end) and the loan repayments; changes apply from a chosen cycle onward. Weekly automatic backup to a folder, export/import, test notification.
+- **Home-screen widget**: next payment, what's left to spend, what others owe, and a + Expense button.
+- **Quick add**: long-press the app icon for "Log expense" or "Lend / borrow"; the Sunday summary has a Log expense button.
+- **Share reminders**: the share icon on a person (or an entry) sends a friendly WhatsApp/SMS reminder.
+- **Settings (⋮ → Settings & plan)**: reminder times and switches, app lock (fingerprint/face/screen lock), edit salary, spending budget, every regular item (amount, day, type, start/end) and the loan repayments; changes apply from a chosen cycle onward. Weekly automatic backup to a folder, export/import, test notification.
+
+## Previewing changes
+
+CI renders every screen with sample data (`ScreenshotTest`) and uploads them as the `moneymap-screenshots`
+artifact. Locally: `./gradlew testDebugUnitTest -Pscreenshots` → `app/build/screenshots/`.
 
 ## Updating the app
 
