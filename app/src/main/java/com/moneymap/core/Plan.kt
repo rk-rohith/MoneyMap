@@ -2,47 +2,23 @@ package com.moneymap.core
 
 import java.time.LocalDate
 
-/**
- * The hard-coded monthly financial plan. A cycle starts on salary day (25th) and
- * ends on the 24th of the following month. Cycles are identified by their start date.
- */
+/** Cycle rules and fixed facts that don't change when the plan is edited. */
 object Plan {
-    const val SALARY = 160_000L
+    /** Salary day. A cycle runs from the 25th to the 24th of the next month. */
     const val SALARY_DAY = 25
     const val REVIEW_DAY = 24
 
-    const val RENT_RECEIVED = 8_000L
-    const val RENT_PAID = 18_000L
-    const val RENT_PAID_DAY = 7
-    /** Rent is received on salary days up to and including this date. */
-    val LAST_RENT_RECEIVED: LocalDate = LocalDate.of(2027, 1, 25)
-    /** Last rent payment. */
-    val LAST_RENT_PAID: LocalDate = LocalDate.of(2027, 1, 7)
-
-    const val TERM_INSURANCE = 3_300L
-    const val TERM_INSURANCE_DAY = 3
-    const val CAR_EMI = 20_000L
-    const val CAR_EMI_DAY = 17
-    const val HDFC_SIP = 2_000L
-    const val JUPITER_SIP = 18_000L
-    const val SIP_DAY = 1
-    const val UTILITY = 20_000L
-    const val SPEND_BUDGET = 20_000L
-
     const val LOAN_TOTAL = 200_000L
     const val LENDER_NAME = "Lender"
-    val DEBT_SCHEDULE: List<Pair<LocalDate, Long>> = listOf(
-        LocalDate.of(2026, 10, 25) to 60_000L,
-        LocalDate.of(2026, 11, 25) to 60_000L,
-        LocalDate.of(2026, 12, 25) to 60_000L,
-        LocalDate.of(2027, 1, 25) to 20_000L,
-    )
 
     /** Nothing dated before this is ever treated as overdue. */
     val TRACK_START: LocalDate = LocalDate.of(2026, 9, 27)
 
     const val HDFC = "HDFC"
     const val JUPITER = "Jupiter"
+
+    const val EMERGENCY_POD = "Emergency pod"
+    const val DEBT_POD = "Debt pod"
 
     fun cycleStartFor(date: LocalDate): LocalDate =
         if (date.dayOfMonth >= SALARY_DAY) date.withDayOfMonth(SALARY_DAY)
@@ -52,127 +28,102 @@ object Plan {
 
     fun cycleLabel(cycleStart: LocalDate): String = "${cycleStart.monthYear()} cycle"
 
-    fun debtFor(cycleStart: LocalDate): Long =
-        DEBT_SCHEDULE.filter { it.first == cycleStart }.sumOf { it.second }
-
-    fun rentReceivedIn(cycleStart: LocalDate): Long =
-        if (!cycleStart.isAfter(LAST_RENT_RECEIVED)) RENT_RECEIVED else 0L
-
-    /** Rent paid on the 7th that falls inside this cycle. */
-    fun rentPaidIn(cycleStart: LocalDate): Long {
-        val rentDate = cycleStart.plusMonths(1).withDayOfMonth(RENT_PAID_DAY)
-        return if (!rentDate.isAfter(LAST_RENT_PAID)) RENT_PAID else 0L
+    /** Date on which something due on [day] of the month falls inside the cycle starting [cycleStart]. */
+    fun occurrence(cycleStart: LocalDate, day: Int): LocalDate {
+        val month = if (day >= SALARY_DAY) cycleStart else cycleStart.plusMonths(1)
+        return month.withDayOfMonth(day.coerceIn(1, month.lengthOfMonth()))
     }
 
-    fun budget(cycleStart: LocalDate): CycleBudget {
-        val rentIn = rentReceivedIn(cycleStart)
-        val rentOut = rentPaidIn(cycleStart)
-        val debt = debtFor(cycleStart)
-        val income = SALARY + rentIn
-        val hdfcHold = TERM_INSURANCE + CAR_EMI + HDFC_SIP + rentOut
-        val toJupiter = income - UTILITY - hdfcHold
-        val emergency = toJupiter - debt - JUPITER_SIP - SPEND_BUDGET
-        return CycleBudget(
-            cycleStart = cycleStart,
-            salary = SALARY,
-            rentReceived = rentIn,
-            income = income,
-            utility = UTILITY,
-            termInsurance = TERM_INSURANCE,
-            carEmi = CAR_EMI,
-            hdfcSip = HDFC_SIP,
-            rentPaid = rentOut,
-            hdfcHold = hdfcHold,
-            transferToJupiter = toJupiter,
-            debtPod = debt,
-            sipPod = JUPITER_SIP,
-            jupiterMain = SPEND_BUDGET,
-            emergencyPod = emergency,
-        )
+    fun isDebtItem(id: String): Boolean = Regex(":debt\\d*$").containsMatchIn(id)
+}
+
+enum class Flow(val label: String) {
+    INCOME("Income"),
+    HDFC("Paid from HDFC"),
+    POD("Paid from a Jupiter pod"),
+}
+
+/** A fixed monthly item: income, a bill/autopay from HDFC, or a payment funded by a Jupiter pod. */
+data class RecurringItem(
+    val id: String,
+    val title: String,
+    val amount: Long,
+    val day: Int,
+    val flow: Flow,
+    val account: String,
+    val autopay: Boolean = false,
+    /** Pod that holds the money until the payment (only for [Flow.POD]). */
+    val pod: String = "",
+    val startDate: LocalDate? = null,
+    val endDate: LocalDate? = null,
+) {
+    fun occursOn(date: LocalDate): Boolean =
+        (startDate == null || !date.isBefore(startDate)) && (endDate == null || !date.isAfter(endDate))
+}
+
+data class PlanConfig(
+    val salary: Long,
+    val spendBudget: Long,
+    val items: List<RecurringItem>,
+)
+
+/** A plan that applies from the cycle starting [from] until the next version. */
+data class PlanVersion(val from: LocalDate, val config: PlanConfig)
+
+data class DebtInstalment(val date: LocalDate, val amount: Long)
+
+data class PlanSettings(
+    val versions: List<PlanVersion>,
+    val debt: List<DebtInstalment>,
+) {
+    init {
+        require(versions.isNotEmpty()) { "A plan needs at least one version" }
     }
 
-    /** All plan items in the cycle that starts on [cycleStart], sorted by date. */
-    fun items(cycleStart: LocalDate): List<PlanItem> {
-        val b = budget(cycleStart)
-        val next = cycleStart.plusMonths(1)
-        val out = mutableListOf<PlanItem>()
-        val sd = cycleStart
+    val sortedVersions: List<PlanVersion> get() = versions.sortedBy { it.from }
 
-        out += PlanItem(id(sd, "salary"), sd, "Salary credited", SALARY, HDFC, ItemKind.INCOME,
-            detail = "Salary arrives in HDFC")
-        if (b.rentReceived > 0) {
-            out += PlanItem(id(sd, "rent-in"), sd, "Rent received", b.rentReceived, HDFC, ItemKind.INCOME,
-                detail = "Rent received on salary day")
-        }
-        out += PlanItem(
-            id(sd, "salary-day"), sd, "Salary-day routine", b.transferToJupiter, "$HDFC → $JUPITER",
-            ItemKind.SALARY_DAY,
-            detail = "Send ${formatInr(b.transferToJupiter)} to Jupiter and split into pods",
-            steps = buildList {
-                add("Pay house utility ${formatInr(UTILITY)} from HDFC")
-                add("Send ${formatInr(b.transferToJupiter)} to Jupiter")
-                if (b.debtPod > 0) add("Debt pod: ${formatInr(b.debtPod)}")
-                add("Emergency pod: ${formatInr(b.emergencyPod)}")
-                add("SIP pod: ${formatInr(b.sipPod)}")
-                add("Keep ${formatInr(b.jupiterMain)} in Jupiter main for spending")
-                add("Leave ${formatInr(b.hdfcHold)} in HDFC for bills")
-            },
-        )
-        out += PlanItem(id(sd, "utility"), sd, "House utility", UTILITY, HDFC, ItemKind.BILL,
-            detail = "Pay from HDFC on salary day")
-        if (b.debtPod > 0) {
-            out += PlanItem(id(sd, "debt"), sd, "Repay ${LENDER_NAME}", b.debtPod, "Debt pod", ItemKind.DEBT,
-                detail = "Instalment on the ₹2,00,000 personal loan")
-        }
+    /** The plan in force for the cycle starting [cycleStart]. Cycles before the first version use the first. */
+    fun configFor(cycleStart: LocalDate): PlanConfig =
+        sortedVersions.lastOrNull { !it.from.isAfter(cycleStart) }?.config ?: sortedVersions.first().config
 
-        val sipDate = next.withDayOfMonth(SIP_DAY)
-        out += PlanItem(id(sipDate, "sip-move"), sipDate, "Move SIP money to Jupiter main", JUPITER_SIP,
-            JUPITER, ItemKind.TRANSFER, detail = "SIP pod → Jupiter main before the SIP autopay")
-        out += PlanItem(id(sipDate, "sip-jupiter"), sipDate, "Jupiter SIP autopay", JUPITER_SIP, JUPITER,
-            ItemKind.AUTOPAY, detail = "Debits on the 1st/2nd")
-        out += PlanItem(id(sipDate, "sip-hdfc"), sipDate, "HDFC SIP autopay", HDFC_SIP, HDFC,
-            ItemKind.AUTOPAY, detail = "Debits on the 1st/2nd")
+    /** Adds or replaces the version starting at [from]. Later versions are kept. */
+    fun withVersion(from: LocalDate, config: PlanConfig): PlanSettings =
+        copy(versions = versions.filter { it.from != from } + PlanVersion(from, config))
 
-        val termDate = next.withDayOfMonth(TERM_INSURANCE_DAY)
-        out += PlanItem(id(termDate, "term"), termDate, "Term insurance", TERM_INSURANCE, HDFC, ItemKind.AUTOPAY,
-            detail = "HDFC autopay")
-
-        if (b.rentPaid > 0) {
-            val rentDate = next.withDayOfMonth(RENT_PAID_DAY)
-            out += PlanItem(id(rentDate, "rent-out"), rentDate, "Pay rent", b.rentPaid, HDFC, ItemKind.BILL,
-                detail = if (rentDate == LAST_RENT_PAID) "Last rent payment" else "Rent paid on the 7th")
-        }
-
-        val carDate = next.withDayOfMonth(CAR_EMI_DAY)
-        out += PlanItem(id(carDate, "car-emi"), carDate, "Car loan EMI", CAR_EMI, HDFC, ItemKind.AUTOPAY,
-            detail = "HDFC autopay")
-
-        val reviewDate = next.withDayOfMonth(REVIEW_DAY)
-        out += PlanItem(id(reviewDate, "review"), reviewDate, "Monthly review", 0, "", ItemKind.REVIEW,
-            detail = "Check spending, pods and who owes what")
-
-        return out.sortedWith(compareBy({ it.date }, { it.kind.order }))
+    fun withoutVersion(from: LocalDate): PlanSettings {
+        val left = versions.filter { it.from != from }
+        return if (left.isEmpty()) this else copy(versions = left)
     }
+}
 
-    /** Items whose dates fall within [from, to] inclusive. */
-    fun itemsBetween(from: LocalDate, to: LocalDate): List<PlanItem> {
-        val result = mutableListOf<PlanItem>()
-        var cycle = cycleStartFor(from)
-        while (!cycle.isAfter(to)) {
-            result += items(cycle).filter { !it.date.isBefore(from) && !it.date.isAfter(to) }
-            cycle = cycle.plusMonths(1)
-        }
-        return result
-    }
+/** The plan as first set up. Editing in the app stores new versions on top of this. */
+object DefaultPlan {
+    val BASE_CYCLE: LocalDate = LocalDate.of(2026, 9, 25)
 
-    fun itemById(id: String): PlanItem? {
-        val date = runCatching { LocalDate.parse(id.substringBefore(':')) }.getOrNull() ?: return null
-        return items(cycleStartFor(date)).firstOrNull { it.id == id }
-    }
+    val items: List<RecurringItem> = listOf(
+        RecurringItem("rent-in", "Rent received", 8_000, 25, Flow.INCOME, Plan.HDFC,
+            endDate = LocalDate.of(2027, 1, 25)),
+        RecurringItem("utility", "House utility", 20_000, 25, Flow.HDFC, Plan.HDFC),
+        RecurringItem("sip-jupiter", "Jupiter SIP autopay", 18_000, 1, Flow.POD, Plan.JUPITER,
+            autopay = true, pod = "SIP pod"),
+        RecurringItem("sip-hdfc", "HDFC SIP autopay", 2_000, 1, Flow.HDFC, Plan.HDFC, autopay = true),
+        RecurringItem("term", "Term insurance", 3_300, 3, Flow.HDFC, Plan.HDFC, autopay = true),
+        RecurringItem("rent-out", "Pay rent", 18_000, 7, Flow.HDFC, Plan.HDFC,
+            endDate = LocalDate.of(2027, 1, 7)),
+        RecurringItem("car-emi", "Car loan EMI", 20_000, 17, Flow.HDFC, Plan.HDFC, autopay = true),
+    )
 
-    fun isDebtItem(id: String): Boolean = id.endsWith(":debt")
+    val config = PlanConfig(salary = 160_000, spendBudget = 20_000, items = items)
 
-    private fun id(date: LocalDate, key: String) = "$date:$key"
+    val debt: List<DebtInstalment> = listOf(
+        DebtInstalment(LocalDate.of(2026, 10, 25), 60_000),
+        DebtInstalment(LocalDate.of(2026, 11, 25), 60_000),
+        DebtInstalment(LocalDate.of(2026, 12, 25), 60_000),
+        DebtInstalment(LocalDate.of(2027, 1, 25), 20_000),
+    )
+
+    val settings = PlanSettings(listOf(PlanVersion(BASE_CYCLE, config)), debt)
+    val engine = PlanEngine(settings)
 }
 
 enum class ItemKind(val order: Int) {
@@ -188,28 +139,172 @@ data class PlanItem(
     val kind: ItemKind,
     val detail: String = "",
     val steps: List<String> = emptyList(),
+    /** Pod that money leaves when this is ticked (debt instalments, pod → Jupiter main moves). */
+    val pod: String = "",
 ) {
     /** Income is informational; everything else gets reminders. */
     val notifies: Boolean get() = kind != ItemKind.INCOME
     val tracked: Boolean get() = !date.isBefore(Plan.TRACK_START)
 }
 
+data class Line(val label: String, val amount: Long)
+
 data class CycleBudget(
     val cycleStart: LocalDate,
     val salary: Long,
-    val rentReceived: Long,
+    val otherIncome: List<Line>,
     val income: Long,
-    val utility: Long,
-    val termInsurance: Long,
-    val carEmi: Long,
-    val hdfcSip: Long,
-    val rentPaid: Long,
+    /** HDFC payments made on salary day (e.g. house utility). */
+    val salaryDayPayments: List<Line>,
+    /** HDFC bills later in the cycle; this money stays in HDFC. */
+    val hdfcBills: List<Line>,
     val hdfcHold: Long,
     val transferToJupiter: Long,
     val debtPod: Long,
-    val sipPod: Long,
+    /** Jupiter pods that fund later payments, e.g. SIP pod. */
+    val pods: List<Line>,
     val jupiterMain: Long,
     val emergencyPod: Long,
 ) {
-    val totalOut: Long get() = utility + hdfcHold + debtPod + sipPod + jupiterMain
+    val salaryDayTotal: Long get() = salaryDayPayments.sumOf { it.amount }
+    val podTotal: Long get() = pods.sumOf { it.amount }
+    fun pod(name: String): Long = pods.filter { it.label == name }.sumOf { it.amount }
+    val totalOut: Long get() = salaryDayTotal + hdfcHold + debtPod + podTotal + jupiterMain
+
+    /** Money that goes into each pod when the salary-day routine is done. */
+    val podCredits: List<Line>
+        get() = buildList {
+            if (debtPod > 0) add(Line(Plan.DEBT_POD, debtPod))
+            if (emergencyPod != 0L) add(Line(Plan.EMERGENCY_POD, emergencyPod))
+            pods.groupBy { it.label }.forEach { (name, lines) -> add(Line(name, lines.sumOf { it.amount })) }
+        }
 }
+
+/** Turns [PlanSettings] into cycles, budgets and dated items. */
+class PlanEngine(val settings: PlanSettings) {
+
+    fun config(cycleStart: LocalDate): PlanConfig = settings.configFor(cycleStart)
+
+    fun spendBudget(cycleStart: LocalDate): Long = config(cycleStart).spendBudget
+
+    fun debtFor(cycleStart: LocalDate): List<DebtInstalment> {
+        val end = Plan.cycleEnd(cycleStart)
+        return settings.debt.filter { !it.date.isBefore(cycleStart) && !it.date.isAfter(end) }.sortedBy { it.date }
+    }
+
+    private fun occurrences(cycleStart: LocalDate, cfg: PlanConfig): List<Pair<RecurringItem, LocalDate>> =
+        cfg.items.mapNotNull { item ->
+            val date = Plan.occurrence(cycleStart, item.day)
+            if (item.amount > 0 && item.occursOn(date)) item to date else null
+        }
+
+    fun budget(cycleStart: LocalDate): CycleBudget = budget(cycleStart, config(cycleStart))
+
+    /** Budget for [cycleStart] using [cfg] (lets the settings screen preview unsaved edits). */
+    fun budget(cycleStart: LocalDate, cfg: PlanConfig): CycleBudget {
+        val occ = occurrences(cycleStart, cfg)
+        val otherIncome = occ.filter { it.first.flow == Flow.INCOME }.map { Line(it.first.title, it.first.amount) }
+        val hdfc = occ.filter { it.first.flow == Flow.HDFC }
+        val salaryDay = hdfc.filter { it.second == cycleStart }.map { Line(it.first.title, it.first.amount) }
+        val bills = hdfc.filter { it.second != cycleStart }.map { Line(it.first.title, it.first.amount) }
+        val pods = occ.filter { it.first.flow == Flow.POD }
+            .map { Line(it.first.pod.ifBlank { "${it.first.title} pod" }, it.first.amount) }
+        val income = cfg.salary + otherIncome.sumOf { it.amount }
+        val hold = bills.sumOf { it.amount }
+        val toJupiter = income - salaryDay.sumOf { it.amount } - hold
+        val debt = debtFor(cycleStart).sumOf { it.amount }
+        val emergency = toJupiter - debt - pods.sumOf { it.amount } - cfg.spendBudget
+        return CycleBudget(
+            cycleStart = cycleStart,
+            salary = cfg.salary,
+            otherIncome = otherIncome,
+            income = income,
+            salaryDayPayments = salaryDay,
+            hdfcBills = bills,
+            hdfcHold = hold,
+            transferToJupiter = toJupiter,
+            debtPod = debt,
+            pods = pods,
+            jupiterMain = cfg.spendBudget,
+            emergencyPod = emergency,
+        )
+    }
+
+    /** All plan items in the cycle that starts on [cycleStart], sorted by date. */
+    fun items(cycleStart: LocalDate): List<PlanItem> {
+        val cfg = config(cycleStart)
+        val b = budget(cycleStart, cfg)
+        val sd = cycleStart
+        val out = mutableListOf<PlanItem>()
+
+        out += PlanItem(id(sd, "salary"), sd, "Salary credited", cfg.salary, Plan.HDFC, ItemKind.INCOME,
+            detail = "Salary arrives in HDFC")
+        out += PlanItem(
+            id(sd, "salary-day"), sd, "Salary-day routine", b.transferToJupiter, "${Plan.HDFC} → ${Plan.JUPITER}",
+            ItemKind.SALARY_DAY,
+            detail = "Send ${formatInr(b.transferToJupiter)} to Jupiter and split into pods",
+            steps = buildList {
+                b.salaryDayPayments.forEach { add("Pay ${it.label.lowercaseFirst()} ${formatInr(it.amount)} from HDFC") }
+                add("Send ${formatInr(b.transferToJupiter)} to Jupiter")
+                b.podCredits.forEach { add("${it.label}: ${formatInr(it.amount)}") }
+                add("Keep ${formatInr(b.jupiterMain)} in Jupiter main for spending")
+                add("Leave ${formatInr(b.hdfcHold)} in HDFC for bills")
+            },
+        )
+
+        for ((item, date) in occurrences(cycleStart, cfg)) {
+            when (item.flow) {
+                Flow.INCOME -> out += PlanItem(id(date, item.id), date, item.title, item.amount, item.account,
+                    ItemKind.INCOME, detail = "Arrives in ${item.account}")
+                Flow.HDFC -> out += PlanItem(id(date, item.id), date, item.title, item.amount, item.account,
+                    if (item.autopay) ItemKind.AUTOPAY else ItemKind.BILL,
+                    detail = when {
+                        date == cycleStart -> "Pay from HDFC on salary day"
+                        item.endDate != null && Plan.occurrence(cycleStart.plusMonths(1), item.day).isAfter(item.endDate) ->
+                            "Last payment"
+                        item.autopay -> "HDFC autopay"
+                        else -> "Pay from HDFC"
+                    })
+                Flow.POD -> {
+                    val pod = item.pod.ifBlank { "${item.title} pod" }
+                    out += PlanItem(id(date, "move-${item.id}"), date, "Move ${pod} money to Jupiter main", item.amount,
+                        Plan.JUPITER, ItemKind.TRANSFER, detail = "$pod → Jupiter main before the payment", pod = pod)
+                    out += PlanItem(id(date, item.id), date, item.title, item.amount, item.account,
+                        if (item.autopay) ItemKind.AUTOPAY else ItemKind.BILL,
+                        detail = if (item.autopay) "${item.account} autopay" else "Pay from ${item.account}")
+                }
+            }
+        }
+
+        debtFor(cycleStart).forEachIndexed { i, d ->
+            out += PlanItem(id(d.date, if (i == 0) "debt" else "debt$i"), d.date, "Repay ${Plan.LENDER_NAME}", d.amount,
+                Plan.DEBT_POD, ItemKind.DEBT, detail = "Instalment on the ₹2,00,000 personal loan", pod = Plan.DEBT_POD)
+        }
+
+        val reviewDate = Plan.cycleEnd(cycleStart)
+        out += PlanItem(id(reviewDate, "review"), reviewDate, "Monthly review", 0, "", ItemKind.REVIEW,
+            detail = "Check spending, pods and who owes what")
+
+        return out.sortedWith(compareBy({ it.date }, { it.kind.order }))
+    }
+
+    /** Items whose dates fall within [from, to] inclusive. */
+    fun itemsBetween(from: LocalDate, to: LocalDate): List<PlanItem> {
+        val result = mutableListOf<PlanItem>()
+        var cycle = Plan.cycleStartFor(from)
+        while (!cycle.isAfter(to)) {
+            result += items(cycle).filter { !it.date.isBefore(from) && !it.date.isAfter(to) }
+            cycle = cycle.plusMonths(1)
+        }
+        return result
+    }
+
+    fun itemById(id: String): PlanItem? {
+        val date = runCatching { LocalDate.parse(id.substringBefore(':')) }.getOrNull() ?: return null
+        return items(Plan.cycleStartFor(date)).firstOrNull { it.id == id }
+    }
+
+    private fun id(date: LocalDate, key: String) = "$date:$key"
+}
+
+private fun String.lowercaseFirst(): String = if (isEmpty()) this else this[0].lowercase() + substring(1)

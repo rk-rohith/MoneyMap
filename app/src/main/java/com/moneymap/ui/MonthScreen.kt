@@ -48,6 +48,7 @@ import androidx.compose.ui.unit.dp
 import com.moneymap.core.EntryWithTxns
 import com.moneymap.core.ItemKind
 import com.moneymap.core.Plan
+import com.moneymap.core.PlanEngine
 import com.moneymap.core.PlanItem
 import com.moneymap.core.SeedData
 import com.moneymap.core.formatInr
@@ -59,6 +60,7 @@ import java.time.LocalDate
 @Composable
 fun MonthScreen(
     today: LocalDate,
+    plan: PlanEngine,
     entries: List<EntryWithTxns>,
     done: Set<String>,
     onToggle: (String, Boolean) -> Unit,
@@ -69,16 +71,16 @@ fun MonthScreen(
     var offset by rememberSaveable { mutableLongStateOf(0L) }
     var splitOpen by rememberSaveable { mutableStateOf(false) }
     val cycle = currentCycle.plusMonths(offset)
-    val cycleItems = remember(cycle) { Plan.items(cycle) }
-    val budget = remember(cycle) { Plan.budget(cycle) }
+    val cycleItems = remember(cycle, plan) { plan.items(cycle) }
+    val budget = remember(cycle, plan) { plan.budget(cycle) }
     val loan = entries.firstOrNull { it.entry.seedKey == SeedData.LENDER_KEY }
 
-    val overdue = remember(today, done) {
-        Plan.itemsBetween(maxOf(Plan.TRACK_START, today.minusDays(62)), today.minusDays(1))
+    val overdue = remember(today, done, plan) {
+        plan.itemsBetween(maxOf(Plan.TRACK_START, today.minusDays(62)), today.minusDays(1))
             .filter { it.notifies && it.id !in done }
     }
-    val nextUp = remember(today, done) {
-        Plan.itemsBetween(maxOf(today, Plan.TRACK_START), today.plusDays(62)).firstOrNull { it.notifies && it.id !in done }
+    val nextUp = remember(today, done, plan) {
+        plan.itemsBetween(maxOf(today, Plan.TRACK_START), today.plusDays(62)).firstOrNull { it.notifies && it.id !in done }
     }
 
     LazyColumn(
@@ -191,23 +193,22 @@ private fun SalarySplitCard(b: com.moneymap.core.CycleBudget, expanded: Boolean,
             AnimatedVisibility(expanded) {
                 Column(Modifier.padding(top = 8.dp)) {
                     SplitRow("Salary (HDFC)", b.salary)
-                    if (b.rentReceived > 0) SplitRow("Rent received", b.rentReceived)
+                    b.otherIncome.forEach { SplitRow(it.label, it.amount) }
                     SplitRow("Total in", b.income, bold = true)
                     HorizontalDivider(Modifier.padding(vertical = 6.dp))
-                    SplitRow("House utility (HDFC)", -b.utility)
+                    b.salaryDayPayments.forEach { SplitRow("${it.label} (HDFC, salary day)", -it.amount) }
                     SplitRow("Keep in HDFC for bills", -b.hdfcHold)
-                    Text(
-                        buildString {
-                            append("Term ${formatInr(b.termInsurance)} · Car EMI ${formatInr(b.carEmi)} · SIP ${formatInr(b.hdfcSip)}")
-                            if (b.rentPaid > 0) append(" · Rent ${formatInr(b.rentPaid)}")
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.padding(start = 12.dp),
-                    )
+                    if (b.hdfcBills.isNotEmpty()) {
+                        Text(
+                            b.hdfcBills.joinToString(" · ") { "${it.label} ${formatInr(it.amount)}" },
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.padding(start = 12.dp),
+                        )
+                    }
                     SplitRow("Send to Jupiter", b.transferToJupiter, bold = true)
                     HorizontalDivider(Modifier.padding(vertical = 6.dp))
                     if (b.debtPod > 0) SplitRow("Debt pod", b.debtPod)
-                    SplitRow("SIP pod", b.sipPod)
+                    b.pods.groupBy { it.label }.forEach { (name, lines) -> SplitRow(name, lines.sumOf { it.amount }) }
                     SplitRow("Jupiter main (spending)", b.jupiterMain)
                     SplitRow("Emergency pod", b.emergencyPod, bold = true)
                 }

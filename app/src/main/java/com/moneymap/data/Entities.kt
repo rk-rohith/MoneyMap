@@ -7,8 +7,11 @@ import androidx.room.PrimaryKey
 import androidx.room.Relation
 import com.moneymap.core.Direction
 import com.moneymap.core.EntryWithTxns
+import com.moneymap.core.ExpenseCategory
+import com.moneymap.core.Goal
 import com.moneymap.core.LedgerEntry
 import com.moneymap.core.LedgerTxn
+import com.moneymap.core.PodMove
 import com.moneymap.core.ReturnPod
 import com.moneymap.core.TxnType
 import java.time.LocalDate
@@ -47,6 +50,34 @@ data class ExpenseEntity(
     val note: String,
     val dateEpochDay: Long,
     val createdAt: Long,
+    val category: String = ExpenseCategory.OTHER.name,
+)
+
+@Entity(tableName = "pod_moves", indices = [Index("linkKey")])
+data class PodMoveEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val pod: String,
+    val amount: Long,
+    val dateEpochDay: Long,
+    val note: String,
+    val linkKey: String?,
+)
+
+@Entity(tableName = "goals")
+data class GoalEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val name: String,
+    val target: Long,
+    val targetEpochDay: Long?,
+    val pod: String,
+    val createdAt: Long,
+)
+
+/** Simple key/value store; holds the plan settings as JSON. */
+@Entity(tableName = "settings")
+data class SettingEntity(
+    @PrimaryKey val key: String,
+    val value: String,
 )
 
 @Entity(tableName = "done_items")
@@ -60,7 +91,14 @@ data class EntryWithTxnsRow(
     @Relation(parentColumn = "id", entityColumn = "entryId") val txns: List<TxnEntity>,
 )
 
-data class Expense(val id: Long = 0, val amount: Long, val note: String, val date: LocalDate, val createdAt: Long = 0)
+data class Expense(
+    val id: Long = 0,
+    val amount: Long,
+    val note: String,
+    val date: LocalDate,
+    val createdAt: Long = 0,
+    val category: ExpenseCategory = ExpenseCategory.OTHER,
+)
 
 fun EntryEntity.toDomain() = LedgerEntry(
     id = id,
@@ -114,4 +152,15 @@ fun LedgerTxn.toEntity() = TxnEntity(
 
 fun EntryWithTxnsRow.toDomain() = EntryWithTxns(entry.toDomain(), txns.map { it.toDomain() })
 
-fun ExpenseEntity.toDomain() = Expense(id, amount, note, LocalDate.ofEpochDay(dateEpochDay), createdAt)
+fun ExpenseEntity.toDomain() =
+    Expense(id, amount, note, LocalDate.ofEpochDay(dateEpochDay), createdAt, ExpenseCategory.parse(category))
+
+fun Expense.toEntity() = ExpenseEntity(id, amount, note, date.toEpochDay(), createdAt, category.name)
+
+fun PodMoveEntity.toDomain() = PodMove(id, pod, amount, LocalDate.ofEpochDay(dateEpochDay), note, linkKey)
+
+fun PodMove.toEntity() = PodMoveEntity(id, pod, amount, date.toEpochDay(), note, linkKey)
+
+fun GoalEntity.toDomain() = Goal(id, name, target, targetEpochDay?.let(LocalDate::ofEpochDay), pod, createdAt)
+
+fun Goal.toEntity() = GoalEntity(id, name, target, targetDate?.toEpochDay(), pod, createdAt)

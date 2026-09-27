@@ -60,17 +60,17 @@ class ReminderTest {
 
     @Test
     fun reviewTextIncludesTotals() {
-        val review = Plan.itemById("2026-10-24:review")!!
+        val review = DefaultPlan.engine.itemById("2026-10-24:review")!!
         val t = ReminderPlanner.paymentText(review, Slot.MORNING, LedgerSummary(88_874, 200_000))
         assertTrue(t.text.contains("₹88,874"))
         assertTrue(t.text.contains("₹2,00,000"))
-        val car = ReminderPlanner.paymentText(Plan.itemById("2026-10-17:car-emi")!!, Slot.EVENING_BEFORE, null)
+        val car = ReminderPlanner.paymentText(DefaultPlan.engine.itemById("2026-10-17:car-emi")!!, Slot.EVENING_BEFORE, null)
         assertEquals("Tomorrow: Car loan EMI ₹20,000", car.title)
     }
 
     @Test
     fun weeklyText() {
-        val t = ReminderPlanner.weeklyText(7_700, LocalDate.of(2026, 10, 11))
+        val t = ReminderPlanner.weeklyText(7_700, LocalDate.of(2026, 10, 11), 20_000)
         assertEquals("₹12,300 left to spend this cycle", t.title)
         assertFalse(t.text.isEmpty())
     }

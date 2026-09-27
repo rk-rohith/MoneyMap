@@ -25,6 +25,8 @@ data class Settlement(
     val amount: Long,
     val pod: ReturnPod,
     val outstandingAfter: Long,
+    val txnId: Long = 0,
+    val date: java.time.LocalDate? = null,
 ) {
     /** "Move ₹X to <pod> today" — only meaningful when money came back to me. */
     val moveHint: String? get() = if (direction == Direction.LENT) "Move ${formatInr(amount)} to ${pod.label} today" else null
@@ -99,10 +101,10 @@ class LedgerService(
         val e = store.entry(entryId) ?: return null
         val pay = amount.coerceAtMost(e.outstanding)
         if (pay <= 0) return null
-        store.insertTxn(LedgerTxn(entryId = entryId, type = e.entry.direction.settleType(), amount = pay,
+        val txnId = store.insertTxn(LedgerTxn(entryId = entryId, type = e.entry.direction.settleType(), amount = pay,
             date = date, note = note.trim(), linkKey = linkKey))
         store.updateEntry(e.entry.copy(updatedAt = now()))
-        return Settlement(entryId, e.entry.person, e.entry.direction, pay, e.entry.returnPod, e.outstanding - pay)
+        return Settlement(entryId, e.entry.person, e.entry.direction, pay, e.entry.returnPod, e.outstanding - pay, txnId, date)
     }
 
     /** Removes the most recent return/repayment. Returns it so callers can unlink plan ticks. */

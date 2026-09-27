@@ -13,9 +13,20 @@ android {
         applicationId = "com.moneymap"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    // A fixed debug key, committed on purpose: every build (local or CI) is signed the same way,
+    // so a new APK installs over the old one and keeps the app's data.
+    signingConfigs {
+        getByName("debug") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
     }
 
     buildTypes {
@@ -70,4 +81,6 @@ dependencies {
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
+    // Real org.json for JVM tests (android.jar only has stubs).
+    testImplementation("org.json:json:20240303")
 }

@@ -34,14 +34,19 @@ object ReminderPlanner {
     val WEEKLY_TIME: LocalTime = LocalTime.of(10, 0)
     const val DUE_REPEAT_DAYS = 3L
 
-    fun plan(now: LocalDateTime, done: Set<String>, entries: List<EntryWithTxns>): List<Reminder> {
+    fun plan(
+        now: LocalDateTime,
+        done: Set<String>,
+        entries: List<EntryWithTxns>,
+        engine: PlanEngine = DefaultPlan.engine,
+    ): List<Reminder> {
         val today = now.toLocalDate()
         val horizon = today.plusDays(HORIZON_DAYS)
         val out = mutableListOf<Reminder>()
 
         // Payments: 8 pm the evening before, 9 am on the day, 7 pm on the day.
         val from = maxOf(today, Plan.TRACK_START)
-        for (item in Plan.itemsBetween(from, horizon)) {
+        for (item in engine.itemsBetween(from, horizon)) {
             if (!item.notifies || item.id in done) continue
             listOf(
                 Slot.EVENING_BEFORE to item.date.minusDays(1).atTime(EVENING_BEFORE_TIME),
@@ -121,14 +126,14 @@ object ReminderPlanner {
         return NotificationText(title, text)
     }
 
-    fun weeklyText(spent: Long, today: LocalDate): NotificationText {
+    fun weeklyText(spent: Long, today: LocalDate, budget: Long): NotificationText {
         val cycle = Plan.cycleStartFor(today)
-        val left = Plan.SPEND_BUDGET - spent
+        val left = budget - spent
         val daysLeft = ChronoUnit.DAYS.between(today, Plan.cycleEnd(cycle)) + 1
         val perDay = if (left > 0) left / daysLeft else 0
         val title = if (left >= 0) "${formatInr(left)} left to spend this cycle"
         else "Over budget by ${formatInr(-left)} this cycle"
         return NotificationText(title,
-            "Spent ${formatInr(spent)} of ${formatInr(Plan.SPEND_BUDGET)} · $daysLeft days left · ${formatInr(perDay)}/day")
+            "Spent ${formatInr(spent)} of ${formatInr(budget)} · $daysLeft days left · ${formatInr(perDay)}/day")
     }
 }

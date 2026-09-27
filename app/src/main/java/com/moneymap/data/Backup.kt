@@ -5,6 +5,7 @@ import android.net.Uri
 import androidx.core.content.FileProvider
 import com.moneymap.core.Direction
 import com.moneymap.core.EntryWithTxns
+import com.moneymap.core.ExpenseCategory
 import com.moneymap.core.TxnType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -15,7 +16,7 @@ import java.time.LocalDate
 
 /** Export to JSON (full backup, importable) + CSV (readable), and import from JSON. */
 object Backup {
-    private const val VERSION = 1
+    private const val VERSION = 2
 
     fun toJson(data: BackupData): String {
         val root = JSONObject()
@@ -49,12 +50,32 @@ object Backup {
                 put(JSONObject().apply {
                     put("id", x.id); put("amount", x.amount); put("note", x.note)
                     put("date", LocalDate.ofEpochDay(x.dateEpochDay).toString()); put("createdAt", x.createdAt)
+                    put("category", x.category)
                 })
             }
         })
         root.put("done", JSONArray().apply {
             data.done.forEach { d -> put(JSONObject().apply { put("itemId", d.itemId); put("doneAt", d.doneAt) }) }
         })
+        root.put("podMoves", JSONArray().apply {
+            data.podMoves.forEach { m ->
+                put(JSONObject().apply {
+                    put("id", m.id); put("pod", m.pod); put("amount", m.amount)
+                    put("date", LocalDate.ofEpochDay(m.dateEpochDay).toString()); put("note", m.note)
+                    put("linkKey", m.linkKey ?: JSONObject.NULL)
+                })
+            }
+        })
+        root.put("goals", JSONArray().apply {
+            data.goals.forEach { g ->
+                put(JSONObject().apply {
+                    put("id", g.id); put("name", g.name); put("target", g.target)
+                    put("targetDate", g.targetEpochDay?.let { LocalDate.ofEpochDay(it).toString() } ?: JSONObject.NULL)
+                    put("pod", g.pod); put("createdAt", g.createdAt)
+                })
+            }
+        })
+        data.plan?.let { root.put("plan", JSONObject(it)) }
         return root.toString(2)
     }
 
@@ -83,12 +104,24 @@ object Backup {
         }
         val expenses = root.optJSONArray("expenses")?.objects().orEmpty().map { o ->
             ExpenseEntity(id = o.getLong("id"), amount = o.getLong("amount"), note = o.optString("note"),
-                dateEpochDay = day(o.getString("date")), createdAt = o.optLong("createdAt"))
+                dateEpochDay = day(o.getString("date")), createdAt = o.optLong("createdAt"),
+                category = ExpenseCategory.parse(o.strOrNull("category")).name)
         }
         val done = root.optJSONArray("done")?.objects().orEmpty().map { o ->
             DoneEntity(o.getString("itemId"), o.optLong("doneAt"))
         }
-        return BackupData(entries, txns, expenses, done)
+        val podMoves = root.optJSONArray("podMoves")?.objects().orEmpty().map { o ->
+            PodMoveEntity(id = o.getLong("id"), pod = o.getString("pod"), amount = o.getLong("amount"),
+                dateEpochDay = day(o.getString("date")), note = o.optString("note"), linkKey = o.strOrNull("linkKey"))
+        }
+        val goals = root.optJSONArray("goals")?.objects().orEmpty().map { o ->
+            GoalEntity(id = o.getLong("id"), name = o.getString("name"), target = o.getLong("target"),
+                targetEpochDay = o.strOrNull("targetDate")?.let(::day), pod = o.getString("pod"),
+                createdAt = o.optLong("createdAt"))
+        }
+        // Validate the plan before accepting it; older backups have none and keep the current plan.
+        val plan = root.optJSONObject("plan")?.let { PlanJson.encode(PlanJson.fromJson(it)) }
+        return BackupData(entries, txns, expenses, done, podMoves, goals, plan)
     }
 
     private fun JSONArray.objects(): List<JSONObject> = (0 until length()).map { getJSONObject(it) }
@@ -111,9 +144,12 @@ object Backup {
     }
 
     fun expensesCsv(expenses: List<Expense>): String = buildString {
-        appendLine(csv("id", "date", "amount", "note"))
-        expenses.forEach { appendLine(csv(it.id, it.date, it.amount, it.note)) }
+        appendLine(csv("id", "date", "amount", "category", "note"))
+        expenses.forEach { appendLine(csv(it.id, it.date, it.amount, it.category.label, it.note)) }
     }
+
+    fun fileName(now: java.time.LocalDateTime = java.time.LocalDateTime.now()): String =
+        "moneymap-backup-${now.format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd-HHmm"))}.json"
 
     /** Writes the export files to cache and returns shareable content URIs. */
     suspend fun export(context: Context, repo: MoneyRepository): List<Uri> = withContext(Dispatchers.IO) {

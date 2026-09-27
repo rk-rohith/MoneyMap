@@ -133,7 +133,7 @@ class LedgerTest {
     @Test
     fun debtTickAddsAndRemovesRepaid() = runTest {
         service.seedIfEmpty()
-        val item = Plan.itemsBetween(LocalDate.of(2026, 10, 25), LocalDate.of(2026, 10, 25))
+        val item = DefaultPlan.engine.itemsBetween(LocalDate.of(2026, 10, 25), LocalDate.of(2026, 10, 25))
             .first { it.kind == ItemKind.DEBT }
 
         service.onDebtTick(item.id, item.amount, item.date, checked = true)
@@ -158,7 +158,7 @@ class LedgerTest {
     @Test
     fun allInstalmentsSettleTheLoan() = runTest {
         service.seedIfEmpty()
-        Plan.itemsBetween(LocalDate.of(2026, 9, 27), LocalDate.of(2027, 3, 1))
+        DefaultPlan.engine.itemsBetween(LocalDate.of(2026, 9, 27), LocalDate.of(2027, 3, 1))
             .filter { it.kind == ItemKind.DEBT }
             .forEach { service.onDebtTick(it.id, it.amount, it.date, true) }
         val loan = service.loanProgress()!!

@@ -13,6 +13,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -23,7 +24,9 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -45,6 +48,7 @@ private val tabs = listOf(
     Tab("Month", Icons.Filled.DateRange),
     Tab("Spend", Icons.Filled.ShoppingCart),
     Tab("People", Icons.Filled.Person),
+    Tab("Save", Icons.Filled.Star),
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -56,6 +60,11 @@ fun MoneyMapRoot(vm: MainViewModel) {
     val expenses by vm.expenses.collectAsStateWithLifecycle()
     val today by vm.today.collectAsStateWithLifecycle()
     val openRequest by vm.openRequest.collectAsStateWithLifecycle()
+    val plan by vm.plan.collectAsStateWithLifecycle()
+    val podMoves by vm.podMoves.collectAsStateWithLifecycle()
+    val goals by vm.goals.collectAsStateWithLifecycle()
+    val backup by vm.backup.collectAsStateWithLifecycle()
+    var settingsOpen by rememberSaveable { mutableStateOf(false) }
 
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var detailId by rememberSaveable { mutableStateOf<Long?>(null) }
@@ -79,7 +88,17 @@ fun MoneyMapRoot(vm: MainViewModel) {
     }
 
     LaunchedEffect(Unit) {
-        vm.messages.collect { snackbar.showSnackbar(it) }
+        vm.messages.collect { msg ->
+            val result = snackbar.showSnackbar(
+                message = msg.text,
+                actionLabel = msg.actionLabel,
+                duration = if (msg.actionLabel != null) SnackbarDuration.Long else SnackbarDuration.Short,
+            )
+            if (result == SnackbarResult.ActionPerformed) msg.action?.invoke()
+        }
+    }
+    val folderLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        if (uri != null) vm.setBackupFolder(uri)
     }
     LaunchedEffect(Unit) {
         vm.exportUris.collect { uris ->
@@ -101,6 +120,7 @@ fun MoneyMapRoot(vm: MainViewModel) {
         if (req.entryId != null) {
             tab = 2
             formOpen = false
+            settingsOpen = false
             detailId = req.entryId
             recordOnOpen = req.record
         }
@@ -108,6 +128,28 @@ fun MoneyMapRoot(vm: MainViewModel) {
     }
 
     val openForm: (Long?) -> Unit = { id -> formEditId = id; formOpen = true }
+
+    if (settingsOpen) {
+        BackHandler { settingsOpen = false }
+        SettingsScreen(
+            today = today,
+            plan = plan,
+            backup = backup,
+            snackbar = snackbar,
+            onBack = { settingsOpen = false },
+            onSavePlan = { vm.savePlan(it) },
+            onChooseFolder = { folderLauncher.launch(null) },
+            onBackupNow = { vm.backupNow() },
+            onBackupOff = { vm.turnOffBackup() },
+            onExport = { vm.export() },
+            onImport = { confirmImport = true },
+            onTestNotification = { vm.sendTestNotification() },
+        )
+        ImportConfirm(confirmImport, onDismiss = { confirmImport = false }) {
+            importLauncher.launch(arrayOf("application/json", "text/plain", "application/octet-stream"))
+        }
+        return
+    }
 
     if (formOpen) {
         BackHandler { formOpen = false }
@@ -148,11 +190,11 @@ fun MoneyMapRoot(vm: MainViewModel) {
                 actions = {
                     IconButton(onClick = { menuOpen = true }) { Icon(Icons.Filled.MoreVert, contentDescription = "More") }
                     DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                        DropdownMenuItem(text = { Text("Settings & plan") }, onClick = {
+                            menuOpen = false; settingsOpen = true
+                        })
                         DropdownMenuItem(text = { Text("Export backup (JSON + CSV)") }, onClick = {
                             menuOpen = false; vm.export()
-                        })
-                        DropdownMenuItem(text = { Text("Import backup…") }, onClick = {
-                            menuOpen = false; confirmImport = true
                         })
                         DropdownMenuItem(text = { Text("Send test notification") }, onClick = {
                             menuOpen = false; vm.sendTestNotification()
@@ -178,15 +220,22 @@ fun MoneyMapRoot(vm: MainViewModel) {
         val mod = Modifier.padding(padding)
         when (tab) {
             0 -> MonthScreen(
-                today = today, entries = entries, done = done, modifier = mod,
+                today = today, plan = plan, entries = entries, done = done, modifier = mod,
                 onToggle = { id, checked -> vm.setDone(id, checked) },
                 onOpenEntry = { detailId = it },
             )
             1 -> SpendScreen(
-                today = today, expenses = expenses, people = com.moneymap.core.Ledger.people(entries), modifier = mod,
-                onAdd = { amount, note -> vm.addExpense(amount, note) },
+                today = today, plan = plan, expenses = expenses, people = com.moneymap.core.Ledger.people(entries), modifier = mod,
+                onAdd = { amount, note, category -> vm.addExpense(amount, note, category) },
                 onPaidForSomeone = { person, amount, note -> vm.paidForSomeone(person, amount, note) },
                 onDelete = { vm.deleteExpense(it) },
+            )
+            3 -> SaveScreen(
+                today = today, plan = plan, podMoves = podMoves, goals = goals, modifier = mod,
+                onPodMove = { pod, amount, note -> vm.addPodMove(pod, amount, note) },
+                onDeletePodMove = { vm.deletePodMove(it) },
+                onSaveGoal = { vm.saveGoal(it) },
+                onDeleteGoal = { vm.deleteGoal(it) },
             )
             else -> PeopleScreen(
                 entries = entries, today = today, modifier = mod,
@@ -199,13 +248,16 @@ fun MoneyMapRoot(vm: MainViewModel) {
         }
     }
 
-    if (confirmImport) {
-        ConfirmDialog(
-            title = "Import backup?",
-            text = "This replaces everything in the app (people, transactions, expenses and ticks) with the backup file.",
-            confirmLabel = "Choose file",
-            onConfirm = { importLauncher.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) },
-            onDismiss = { confirmImport = false },
-        )
-    }
+}
+
+@Composable
+private fun ImportConfirm(show: Boolean, onDismiss: () -> Unit, onConfirm: () -> Unit) {
+    if (!show) return
+    ConfirmDialog(
+        title = "Import backup?",
+        text = "This replaces everything in the app (people, expenses, pods, goals, plan and ticks) with the backup file.",
+        confirmLabel = "Choose file",
+        onConfirm = onConfirm,
+        onDismiss = onDismiss,
+    )
 }

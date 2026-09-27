@@ -15,7 +15,7 @@ object SeedData {
             LedgerEntry(
                 person = Plan.LENDER_NAME, direction = Direction.BORROWED, amount = Plan.LOAN_TOTAL,
                 reason = "Personal loan (interest-free)", date = LocalDate.of(2026, 9, 25),
-                dueDate = Plan.DEBT_SCHEDULE.last().first, returnPod = ReturnPod.DEBT,
+                dueDate = DefaultPlan.debt.last().date, returnPod = ReturnPod.DEBT,
                 notes = "Repay ₹60,000 on 25 Oct, 25 Nov, 25 Dec 2026 and ₹20,000 on 25 Jan 2027 from the Debt pod",
                 seedKey = LENDER_KEY,
             )

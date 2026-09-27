@@ -17,6 +17,7 @@ import com.moneymap.core.Reminder
 import com.moneymap.core.ReminderPlanner
 import com.moneymap.core.ReminderType
 import com.moneymap.core.Slot
+import com.moneymap.data.AutoBackup
 import com.moneymap.data.MoneyRepository
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -59,7 +60,7 @@ class AlarmReceiver : BroadcastReceiver() {
         val today = LocalDate.now()
         when (r.type) {
             ReminderType.PAYMENT -> {
-                val item = r.itemId?.let(Plan::itemById) ?: return
+                val item = r.itemId?.let { repo.planNow().itemById(it) } ?: return
                 if (repo.isDone(item.id)) return
                 val summary = if (item.kind == ItemKind.REVIEW) Ledger.summary(repo.entriesNow()) else null
                 val text = ReminderPlanner.paymentText(item, r.slot, summary)
@@ -94,7 +95,9 @@ class AlarmReceiver : BroadcastReceiver() {
                     ))
             }
             ReminderType.WEEKLY -> {
-                val text = ReminderPlanner.weeklyText(repo.spentInCycle(today), today)
+                AutoBackup.runIfDue(context, repo)
+                val budget = repo.planNow().spendBudget(Plan.cycleStartFor(today))
+                val text = ReminderPlanner.weeklyText(repo.spentInCycle(today), today, budget)
                 val open = Notifications.openAppIntent(context, Notifications.ID_WEEKLY) {
                     putExtra(MainActivity.EXTRA_TAB, 1)
                 }
@@ -175,7 +178,7 @@ class AlarmReceiver : BroadcastReceiver() {
         suspend fun sendTest(context: Context, repo: MoneyRepository) {
             val today = LocalDate.now()
             val done = repo.doneNow()
-            val item = Plan.itemsBetween(maxOf(today, Plan.TRACK_START), today.plusDays(62))
+            val item = repo.planNow().itemsBetween(maxOf(today, Plan.TRACK_START), today.plusDays(62))
                 .firstOrNull { it.notifies && it.id !in done } ?: return
             val r = Reminder("test:${item.id}", LocalDateTime.now(), ReminderType.PAYMENT, Slot.MORNING, itemId = item.id)
             val text = ReminderPlanner.paymentText(item, Slot.MORNING,

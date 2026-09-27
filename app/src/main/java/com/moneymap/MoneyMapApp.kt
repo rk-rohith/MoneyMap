@@ -1,6 +1,7 @@
 package com.moneymap
 
 import android.app.Application
+import com.moneymap.data.AutoBackup
 import com.moneymap.data.MoneyDatabase
 import com.moneymap.data.MoneyRepository
 import com.moneymap.notify.AlarmScheduler
@@ -38,6 +39,7 @@ class MoneyMapApp : Application() {
         appScope.launch {
             repository.init()
             AlarmScheduler.rescheduleAll(this@MoneyMapApp, repository)
+            AutoBackup.runIfDue(this@MoneyMapApp, repository)
         }
     }
 }

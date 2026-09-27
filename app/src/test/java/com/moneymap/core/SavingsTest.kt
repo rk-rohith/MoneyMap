@@ -1,0 +1,92 @@
+package com.moneymap.core
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import java.time.LocalDate
+
+class SavingsTest {
+    private val plan = DefaultPlan.engine
+    private val oct = LocalDate.of(2026, 10, 25)
+
+    @Test
+    fun salaryDayTickCreditsEveryPod() {
+        val item = plan.items(oct).first { it.kind == ItemKind.SALARY_DAY }
+        val moves = Pods.movesForTick(item, plan.budget(oct))
+        assertEquals(
+            mapOf(Plan.DEBT_POD to 60_000L, Plan.EMERGENCY_POD to 6_700L, "SIP pod" to 18_000L),
+            moves.associate { it.pod to it.amount },
+        )
+        assertTrue(moves.all { it.linkKey == item.id })
+    }
+
+    @Test
+    fun debtAndMoveTicksDebitPods() {
+        val items = plan.items(oct)
+        val debt = items.first { it.kind == ItemKind.DEBT }
+        val move = items.first { it.kind == ItemKind.TRANSFER }
+        val salaryDay = items.first { it.kind == ItemKind.SALARY_DAY }
+        val all = Pods.movesForTick(salaryDay, plan.budget(oct)) +
+            Pods.movesForTick(debt, plan.budget(oct)) +
+            Pods.movesForTick(move, plan.budget(oct))
+        assertEquals(0L, Pods.balanceOf(all, Plan.DEBT_POD))
+        assertEquals(0L, Pods.balanceOf(all, "SIP pod"))
+        assertEquals(6_700L, Pods.balanceOf(all, Plan.EMERGENCY_POD))
+        assertTrue(Pods.movesForTick(items.first { it.id.endsWith(":car-emi") }, plan.budget(oct)).isEmpty())
+    }
+
+    @Test
+    fun returnsGoToTheirPod() {
+        val m = Pods.moveForReturn(ReturnPod.SRI_LANKA, 44_282, oct, "Friend", 7)!!
+        assertEquals("Sri Lanka pod", m.pod)
+        assertEquals("txn:7", m.linkKey)
+        assertNull(Pods.moveForReturn(ReturnPod.JUPITER_MAIN, 3_008, oct, "Madhu", 8))
+    }
+
+    @Test
+    fun balancesListDefaultAndExtraPods() {
+        val moves = listOf(
+            PodMove(1, Plan.EMERGENCY_POD, 10_000, oct),
+            PodMove(2, Plan.EMERGENCY_POD, -2_500, oct.plusDays(3)),
+            PodMove(3, "Car service pod", 4_000, oct),
+        )
+        val b = Pods.balances(moves, listOf("SIP pod"))
+        assertEquals(listOf(Plan.EMERGENCY_POD, Plan.DEBT_POD, "Sri Lanka pod", "SIP pod", "Car service pod"), b.map { it.pod })
+        assertEquals(7_500L, b.first().balance)
+        assertEquals(2L, b.first().moves.first().id) // newest first
+    }
+
+    @Test
+    fun goalPerCycle() {
+        val goal = Goal(name = "Sri Lanka trip", target = 100_000, targetDate = LocalDate.of(2026, 12, 10), pod = "Sri Lanka pod")
+        val p = Pods.goalProgress(goal, saved = 40_000, today = LocalDate.of(2026, 9, 27))
+        // Sep, Oct and Nov cycles are left before the Dec 10 target (which falls in the Nov cycle).
+        assertEquals(3L, p.cyclesLeft)
+        assertEquals(60_000L, p.remaining)
+        assertEquals(20_000L, p.perCycle)
+        assertEquals(0.4f, p.progress, 0.001f)
+
+        val done = Pods.goalProgress(goal, saved = 120_000, today = LocalDate.of(2026, 9, 27))
+        assertTrue(done.reached)
+        assertEquals(0L, done.perCycle)
+        assertNull(Pods.goalProgress(goal.copy(targetDate = null), 0, LocalDate.of(2026, 9, 27)).perCycle)
+        // A past target date still asks for the rest in one cycle.
+        assertEquals(1L, Pods.goalProgress(goal, 0, LocalDate.of(2027, 3, 1)).cyclesLeft)
+    }
+
+    @Test
+    fun categoryBreakdown() {
+        val b = Spending.breakdown(listOf(
+            ExpenseCategory.FOOD to 3_000L,
+            ExpenseCategory.TRANSPORT to 1_000L,
+            ExpenseCategory.FOOD to 1_000L,
+        ))
+        assertEquals(listOf(ExpenseCategory.FOOD, ExpenseCategory.TRANSPORT), b.map { it.category })
+        assertEquals(4_000L, b[0].amount)
+        assertEquals(0.8f, b[0].share, 0.001f)
+        assertTrue(Spending.breakdown(emptyList()).isEmpty())
+        assertEquals(ExpenseCategory.OTHER, ExpenseCategory.parse(null))
+        assertEquals(ExpenseCategory.FOOD, ExpenseCategory.parse("FOOD"))
+    }
+}

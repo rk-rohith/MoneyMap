@@ -10,6 +10,8 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.Transaction
 import androidx.room.Update
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -100,11 +102,77 @@ interface MoneyDao {
 
     @Query("DELETE FROM done_items")
     suspend fun clearDone()
+
+    @Query("SELECT * FROM pod_moves ORDER BY dateEpochDay DESC, id DESC")
+    fun observePodMoves(): Flow<List<PodMoveEntity>>
+
+    @Query("SELECT * FROM pod_moves")
+    suspend fun podMoves(): List<PodMoveEntity>
+
+    @Insert
+    suspend fun insertPodMove(move: PodMoveEntity): Long
+
+    @Query("DELETE FROM pod_moves WHERE id = :id")
+    suspend fun deletePodMove(id: Long)
+
+    @Query("DELETE FROM pod_moves WHERE linkKey = :key")
+    suspend fun deletePodMovesByLink(key: String)
+
+    @Query("DELETE FROM pod_moves")
+    suspend fun clearPodMoves()
+
+    @Query("SELECT * FROM goals ORDER BY createdAt")
+    fun observeGoals(): Flow<List<GoalEntity>>
+
+    @Query("SELECT * FROM goals")
+    suspend fun goals(): List<GoalEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertGoal(goal: GoalEntity): Long
+
+    @Query("DELETE FROM goals WHERE id = :id")
+    suspend fun deleteGoal(id: Long)
+
+    @Query("DELETE FROM goals")
+    suspend fun clearGoals()
+
+    @Query("SELECT value FROM settings WHERE `key` = :key")
+    fun observeSetting(key: String): Flow<String?>
+
+    @Query("SELECT value FROM settings WHERE `key` = :key")
+    suspend fun setting(key: String): String?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun putSetting(setting: SettingEntity)
+}
+
+/** v1 → v2: expense categories, pod balances, goals and editable plan settings. */
+val MIGRATION_1_2 = object : Migration(1, 2) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `expenses` ADD COLUMN `category` TEXT NOT NULL DEFAULT 'OTHER'")
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `pod_moves` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                "`pod` TEXT NOT NULL, `amount` INTEGER NOT NULL, `dateEpochDay` INTEGER NOT NULL, " +
+                "`note` TEXT NOT NULL, `linkKey` TEXT)"
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_pod_moves_linkKey` ON `pod_moves` (`linkKey`)")
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `goals` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                "`name` TEXT NOT NULL, `target` INTEGER NOT NULL, `targetEpochDay` INTEGER, " +
+                "`pod` TEXT NOT NULL, `createdAt` INTEGER NOT NULL)"
+        )
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `settings` (`key` TEXT NOT NULL, `value` TEXT NOT NULL, PRIMARY KEY(`key`))"
+        )
+    }
 }
 
 @Database(
-    entities = [EntryEntity::class, TxnEntity::class, ExpenseEntity::class, DoneEntity::class],
-    version = 1,
+    entities = [
+        EntryEntity::class, TxnEntity::class, ExpenseEntity::class, DoneEntity::class,
+        PodMoveEntity::class, GoalEntity::class, SettingEntity::class,
+    ],
+    version = 2,
     exportSchema = false,
 )
 abstract class MoneyDatabase : RoomDatabase() {
@@ -112,6 +180,8 @@ abstract class MoneyDatabase : RoomDatabase() {
 
     companion object {
         fun create(context: Context): MoneyDatabase =
-            Room.databaseBuilder(context, MoneyDatabase::class.java, "moneymap.db").build()
+            Room.databaseBuilder(context, MoneyDatabase::class.java, "moneymap.db")
+                .addMigrations(MIGRATION_1_2)
+                .build()
     }
 }
