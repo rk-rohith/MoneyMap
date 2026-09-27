@@ -72,9 +72,50 @@ data class PlanVersion(val from: LocalDate, val config: PlanConfig)
 
 data class DebtInstalment(val date: LocalDate, val amount: Long)
 
+/**
+ * A one-off planned expense (yearly premium, service, festival budget). Money is set aside in its own pod
+ * on salary days — spread over up to [spreadCycles] cycles ending with the cycle it's due in, but never
+ * before [fundFrom] — and paid from that pod on [date].
+ */
+data class OneOff(
+    val id: String,
+    val title: String,
+    val amount: Long,
+    val date: LocalDate,
+    val spreadCycles: Int = 1,
+    /** First cycle that can set money aside (the cycle it was planned in). */
+    val fundFrom: LocalDate = Plan.cycleStartFor(date),
+) {
+    val pod: String get() = "$title pod"
+    val dueCycle: LocalDate get() = Plan.cycleStartFor(date)
+
+    /** Cycles that set money aside, oldest first. */
+    fun fundingCycles(): List<LocalDate> {
+        val wanted = dueCycle.minusMonths((spreadCycles.coerceIn(1, 24) - 1).toLong())
+        val first = maxOf(wanted, Plan.cycleStartFor(fundFrom)).let { if (it.isAfter(dueCycle)) dueCycle else it }
+        val out = mutableListOf<LocalDate>()
+        var c = first
+        while (!c.isAfter(dueCycle)) {
+            out += c
+            c = c.plusMonths(1)
+        }
+        return out
+    }
+
+    /** Amount set aside in the cycle starting [cycleStart]; the last cycle takes any rounding remainder. */
+    fun fundingFor(cycleStart: LocalDate): Long {
+        val cycles = fundingCycles()
+        val i = cycles.indexOf(cycleStart)
+        if (i < 0) return 0
+        val base = amount / cycles.size
+        return if (i == cycles.lastIndex) amount - base * (cycles.size - 1) else base
+    }
+}
+
 data class PlanSettings(
     val versions: List<PlanVersion>,
     val debt: List<DebtInstalment>,
+    val oneOffs: List<OneOff> = emptyList(),
 ) {
     init {
         require(versions.isNotEmpty()) { "A plan needs at least one version" }
@@ -208,7 +249,8 @@ class PlanEngine(val settings: PlanSettings) {
         val salaryDay = hdfc.filter { it.second == cycleStart }.map { Line(it.first.title, it.first.amount) }
         val bills = hdfc.filter { it.second != cycleStart }.map { Line(it.first.title, it.first.amount) }
         val pods = occ.filter { it.first.flow == Flow.POD }
-            .map { Line(it.first.pod.ifBlank { "${it.first.title} pod" }, it.first.amount) }
+            .map { Line(it.first.pod.ifBlank { "${it.first.title} pod" }, it.first.amount) } +
+            settings.oneOffs.mapNotNull { o -> o.fundingFor(cycleStart).takeIf { it > 0 }?.let { Line(o.pod, it) } }
         val income = cfg.salary + otherIncome.sumOf { it.amount }
         val hold = bills.sumOf { it.amount }
         val toJupiter = income - salaryDay.sumOf { it.amount } - hold
@@ -274,6 +316,15 @@ class PlanEngine(val settings: PlanSettings) {
                         detail = if (item.autopay) "${item.account} autopay" else "Pay from ${item.account}")
                 }
             }
+        }
+
+        val end = Plan.cycleEnd(cycleStart)
+        settings.oneOffs.filter { !it.date.isBefore(cycleStart) && !it.date.isAfter(end) && it.amount > 0 }.forEach { o ->
+            out += PlanItem(id(o.date, "move-oneoff-${o.id}"), o.date, "Move ${o.pod} money to Jupiter main", o.amount,
+                Plan.JUPITER, ItemKind.TRANSFER, detail = "${o.pod} → Jupiter main before paying", pod = o.pod)
+            out += PlanItem(id(o.date, "oneoff-${o.id}"), o.date, o.title, o.amount, Plan.JUPITER, ItemKind.BILL,
+                detail = if (o.fundingCycles().size > 1) "Planned one-off · saved over ${o.fundingCycles().size} cycles"
+                else "Planned one-off")
         }
 
         debtFor(cycleStart).forEachIndexed { i, d ->

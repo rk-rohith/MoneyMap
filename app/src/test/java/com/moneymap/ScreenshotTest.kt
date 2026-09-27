@@ -13,6 +13,8 @@ import com.moneymap.core.ExpenseCategory
 import com.moneymap.core.Goal
 import com.moneymap.core.ItemKind
 import com.moneymap.core.LedgerTxn
+import com.moneymap.core.OneOff
+import com.moneymap.core.PlanEngine
 import com.moneymap.core.Pods
 import com.moneymap.core.SeedData
 import com.moneymap.core.TxnType
@@ -23,6 +25,7 @@ import com.moneymap.ui.EntryDetailScreen
 import com.moneymap.ui.MonthScreen
 import com.moneymap.ui.PeopleScreen
 import com.moneymap.ui.SaveScreen
+import com.moneymap.ui.SearchScreen
 import com.moneymap.ui.SettingsScreen
 import com.moneymap.ui.SpendScreen
 import com.moneymap.ui.theme.MoneyMapTheme
@@ -133,8 +136,17 @@ class ScreenshotTest {
     }
 
     @Test
+    fun search() = shot("7-search") {
+        SearchScreen(entries = entries, expenses = expenses, podMoves = podMoves, onOpenEntry = {}, onBack = {},
+            initialQuery = "emi")
+    }
+
+    @Test
     fun settings() = shot("6-settings") {
-        SettingsScreen(today = today, plan = plan, backup = BackupState("Documents/MoneyMap", 0),
+        val withOneOff = PlanEngine(DefaultPlan.settings.copy(oneOffs = listOf(
+            OneOff("o1", "Car insurance", 18_000, LocalDate.of(2027, 3, 10), 3, LocalDate.of(2026, 10, 20)),
+        )))
+        SettingsScreen(today = today, plan = withOneOff, backup = BackupState("Documents/MoneyMap", 0),
             snackbar = SnackbarHostState(), onBack = {}, onSavePlan = {}, onChooseFolder = {}, onBackupNow = {},
             onBackupOff = {}, onExport = {}, onImport = {}, onTestNotification = {})
     }

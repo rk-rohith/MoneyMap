@@ -2,6 +2,7 @@ package com.moneymap.data
 
 import com.moneymap.core.DefaultPlan
 import com.moneymap.core.Flow
+import com.moneymap.core.OneOff
 import com.moneymap.core.PlanEngine
 import com.moneymap.core.RecurringItem
 import org.junit.Assert.assertEquals
@@ -16,9 +17,11 @@ class BackupJsonTest {
             startDate = LocalDate.of(2027, 3, 1), endDate = null)
         val settings = DefaultPlan.settings
             .withVersion(LocalDate.of(2027, 4, 25), DefaultPlan.config.copy(salary = 180_000, items = DefaultPlan.items + extra))
+            .copy(oneOffs = listOf(OneOff("o1", "Car insurance", 18_000, LocalDate.of(2027, 3, 10), 3, LocalDate.of(2026, 10, 25))))
         val back = PlanJson.decode(PlanJson.encode(settings))
         assertEquals(settings.sortedVersions, back.sortedVersions)
         assertEquals(settings.debt, back.debt)
+        assertEquals(settings.oneOffs, back.oneOffs)
         assertEquals(PlanEngine(settings).budget(LocalDate.of(2027, 5, 25)), PlanEngine(back).budget(LocalDate.of(2027, 5, 25)))
     }
 

@@ -49,6 +49,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.moneymap.core.DebtInstalment
 import com.moneymap.core.Flow
+import com.moneymap.core.OneOff
 import com.moneymap.core.Plan
 import com.moneymap.core.PlanEngine
 import com.moneymap.core.PlanSettings
@@ -59,6 +60,7 @@ import com.moneymap.core.long
 import com.moneymap.core.monthYear
 import com.moneymap.core.parseAmount
 import com.moneymap.core.short
+import com.moneymap.ui.theme.dynamicColorSupported
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -86,6 +88,8 @@ fun SettingsScreen(
     onSaveReminders: (ReminderPrefs) -> Unit = {},
     lockEnabled: Boolean = false,
     onLockChange: (Boolean) -> Unit = {},
+    dynamicColor: Boolean = false,
+    onDynamicColorChange: (Boolean) -> Unit = {},
 ) {
     Scaffold(
         topBar = {
@@ -156,6 +160,19 @@ fun SettingsScreen(
                 }
             }
 
+            if (dynamicColorSupported) {
+                OutlinedCard(Modifier.fillMaxWidth()) {
+                    Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Wallpaper colours", style = MaterialTheme.typography.titleMedium)
+                            Text("Use Material You colours from your wallpaper instead of Money map green.",
+                                style = MaterialTheme.typography.bodySmall)
+                        }
+                        Switch(checked = dynamicColor, onCheckedChange = onDynamicColorChange)
+                    }
+                }
+            }
+
             OutlinedCard(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Notifications", style = MaterialTheme.typography.titleMedium)
@@ -179,6 +196,10 @@ private fun PlanEditor(today: LocalDate, plan: PlanEngine, onSave: (PlanSettings
     val from = Plan.cycleStartFor(today).plusMonths(offset)
     var draft by remember(from, settings) { mutableStateOf(plan.config(from)) }
     var debt by remember(settings) { mutableStateOf(settings.debt.sortedBy { it.date }) }
+    var oneOffs by remember(settings) { mutableStateOf(settings.oneOffs.sortedBy { it.date }) }
+    var editOneOff by remember { mutableStateOf<OneOff?>(null) }
+    var addOneOff by remember { mutableStateOf(false) }
+    var showYear by rememberSaveable { mutableStateOf(false) }
     var salaryText by remember(from, settings) { mutableStateOf(formatInr(plan.config(from).salary, withSymbol = false)) }
     var budgetText by remember(from, settings) { mutableStateOf(formatInr(plan.config(from).spendBudget, withSymbol = false)) }
     var editItem by remember { mutableStateOf<RecurringItem?>(null) }
@@ -189,10 +210,12 @@ private fun PlanEditor(today: LocalDate, plan: PlanEngine, onSave: (PlanSettings
     val salary = parseAmount(salaryText)
     val budget = parseAmount(budgetText)
     val working = draft.copy(salary = salary ?: draft.salary, spendBudget = budget ?: draft.spendBudget)
-    val previewEngine = PlanEngine(settings.withVersion(from, working).copy(debt = debt))
+    val draftSettings = settings.withVersion(from, working).copy(debt = debt, oneOffs = oneOffs)
+    val previewEngine = PlanEngine(draftSettings)
     val before = plan.budget(from)
     val after = previewEngine.budget(from)
-    val changed = working != plan.config(from) || debt != settings.debt.sortedBy { it.date }
+    val changed = working != plan.config(from) || debt != settings.debt.sortedBy { it.date } ||
+        oneOffs != settings.oneOffs.sortedBy { it.date }
 
     OutlinedCard(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -255,6 +278,30 @@ private fun PlanEditor(today: LocalDate, plan: PlanEngine, onSave: (PlanSettings
                 style = MaterialTheme.typography.bodySmall)
 
             HorizontalDivider()
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Planned one-offs", style = MaterialTheme.typography.titleSmall)
+                    Text("Yearly premiums, services, festivals… saved in their own pod",
+                        style = MaterialTheme.typography.bodySmall)
+                }
+                TextButton(onClick = { addOneOff = true }) {
+                    Icon(Icons.Filled.Add, contentDescription = null)
+                    Text("Add")
+                }
+            }
+            oneOffs.forEach { o ->
+                Row(Modifier.fillMaxWidth().clickable { editOneOff = o }.padding(vertical = 6.dp)) {
+                    Column(Modifier.weight(1f)) {
+                        Text(o.title, style = MaterialTheme.typography.bodyLarge)
+                        val n = o.fundingCycles().size
+                        Text("${o.date.long()} · " + if (n > 1) "save over $n cycles" else "set aside in ${o.dueCycle.monthYear()}",
+                            style = MaterialTheme.typography.bodySmall)
+                    }
+                    Text(formatInr(o.amount), style = MaterialTheme.typography.bodyLarge)
+                }
+            }
+
+            HorizontalDivider()
             Text("Emergency fund in ${from.monthYear()} cycle: ${formatInr(after.emergencyPod)}" +
                 if (after.emergencyPod != before.emergencyPod) " (now ${formatInr(before.emergencyPod)})" else "",
                 style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold,
@@ -263,9 +310,13 @@ private fun PlanEditor(today: LocalDate, plan: PlanEngine, onSave: (PlanSettings
                 Text("Spending more than comes in this cycle.", style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error)
             }
+            TextButton(onClick = { showYear = !showYear }) {
+                Text(if (showYear) "Hide next 12 months" else if (changed) "Compare next 12 months" else "Show next 12 months")
+            }
+            if (showYear) YearTable(from, plan, previewEngine, changed)
             Button(
                 enabled = changed && salary != null && budget != null,
-                onClick = { onSave(settings.withVersion(from, working).copy(debt = debt)) },
+                onClick = { onSave(draftSettings) },
                 modifier = Modifier.fillMaxWidth(),
             ) { Text("Save plan from ${from.monthYear()}") }
 
@@ -299,6 +350,18 @@ private fun PlanEditor(today: LocalDate, plan: PlanEngine, onSave: (PlanSettings
                 val others = working.items.filter { it.id != item.id }
                 draft = working.copy(items = others + item)
                 addItem = false; editItem = null
+            },
+        )
+    }
+    if (addOneOff || editOneOff != null) {
+        OneOffDialog(
+            existing = editOneOff,
+            today = today,
+            onDismiss = { addOneOff = false; editOneOff = null },
+            onDelete = { id -> oneOffs = oneOffs.filter { it.id != id }; editOneOff = null },
+            onSave = { o ->
+                oneOffs = (oneOffs.filter { it.id != o.id } + o).sortedBy { it.date }
+                addOneOff = false; editOneOff = null
             },
         )
     }
@@ -439,3 +502,111 @@ private fun DebtDialog(onDismiss: () -> Unit, onAdd: (DebtInstalment) -> Unit) {
     )
 }
 
+
+/** Emergency fund for the next 12 cycles, now vs with the unsaved changes. */
+@Composable
+private fun YearTable(from: LocalDate, current: PlanEngine, draft: PlanEngine, changed: Boolean) {
+    val rows = (0L until 12L).map { i ->
+        val c = from.plusMonths(i)
+        Triple(c, current.budget(c).emergencyPod, draft.budget(c).emergencyPod)
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Row {
+            Text("Cycle", Modifier.weight(1f), style = MaterialTheme.typography.labelMedium)
+            Text(if (changed) "Now" else "Emergency", Modifier.weight(1f), style = MaterialTheme.typography.labelMedium)
+            if (changed) {
+                Text("After", Modifier.weight(1f), style = MaterialTheme.typography.labelMedium)
+                Text("Change", Modifier.weight(1f), style = MaterialTheme.typography.labelMedium)
+            }
+        }
+        rows.forEach { (c, before, after) ->
+            val diff = after - before
+            Row {
+                Text(c.monthYear(), Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
+                Text(formatInr(before), Modifier.weight(1f), style = MaterialTheme.typography.bodySmall,
+                    color = if (before < 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface)
+                if (changed) {
+                    Text(formatInr(after), Modifier.weight(1f), style = MaterialTheme.typography.bodySmall,
+                        color = if (after < 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface)
+                    Text(if (diff == 0L) "–" else (if (diff > 0) "+" else "") + formatInr(diff), Modifier.weight(1f),
+                        style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold,
+                        color = when {
+                            diff > 0 -> MaterialTheme.colorScheme.primary
+                            diff < 0 -> MaterialTheme.colorScheme.error
+                            else -> MaterialTheme.colorScheme.onSurfaceVariant
+                        })
+                }
+            }
+        }
+        val totalBefore = rows.sumOf { it.second }
+        val totalAfter = rows.sumOf { it.third }
+        HorizontalDivider(Modifier.padding(vertical = 4.dp))
+        Text(
+            if (changed) "12-month emergency fund: ${formatInr(totalBefore)} → ${formatInr(totalAfter)}"
+            else "12-month emergency fund: ${formatInr(totalBefore)}",
+            style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold,
+        )
+    }
+}
+
+@Composable
+private fun OneOffDialog(
+    existing: OneOff?,
+    today: LocalDate,
+    onDismiss: () -> Unit,
+    onDelete: (String) -> Unit,
+    onSave: (OneOff) -> Unit,
+) {
+    var title by rememberSaveable { mutableStateOf(existing?.title ?: "") }
+    var amount by rememberSaveable { mutableStateOf(existing?.amount?.let { formatInr(it, withSymbol = false) } ?: "") }
+    var date by remember { mutableStateOf(existing?.date ?: today.plusMonths(2)) }
+    var spread by rememberSaveable { mutableStateOf(existing?.spreadCycles ?: 1) }
+    var showErrors by rememberSaveable { mutableStateOf(false) }
+    val parsed = parseAmount(amount)
+    val preview = OneOff(existing?.id ?: "new", title.ifBlank { "One-off" }, parsed ?: 0, date, spread,
+        existing?.fundFrom ?: Plan.cycleStartFor(today))
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (existing == null) "Plan a one-off" else "Edit ${existing.title}") },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(title, { title = it }, label = { Text("What for") }, singleLine = true,
+                    isError = showErrors && title.isBlank(), modifier = Modifier.fillMaxWidth())
+                AmountField(amount, { amount = it }, isError = showErrors && parsed == null)
+                DateField("Due", date, { if (it != null) date = it })
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Save over", Modifier.weight(1f))
+                    TextButton(onClick = { spread = (spread - 1).coerceAtLeast(1) }) { Text("−") }
+                    Text("$spread cycle${if (spread == 1) "" else "s"}")
+                    TextButton(onClick = { spread = (spread + 1).coerceAtMost(12) }) { Text("+") }
+                }
+                val cycles = preview.fundingCycles()
+                if (parsed != null) {
+                    Text(
+                        if (cycles.size == 1) "Set aside ${formatInr(parsed)} on salary day of the ${cycles.first().monthYear()} cycle"
+                        else "Set aside about ${formatInr(parsed / cycles.size)} each cycle, " +
+                            "${cycles.first().monthYear()} to ${cycles.last().monthYear()}",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    if (cycles.size < spread) {
+                        Text("Only ${cycles.size} cycle${if (cycles.size == 1) "" else "s"} left before it's due.",
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                    }
+                }
+                if (existing != null) {
+                    TextButton(onClick = { onDelete(existing.id) }) {
+                        Text("Remove", color = MaterialTheme.colorScheme.error)
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                val a = parsed
+                if (title.isBlank() || a == null) showErrors = true
+                else onSave(preview.copy(id = existing?.id ?: "oo-${System.currentTimeMillis()}", title = title.trim(), amount = a))
+            }) { Text("Done") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
+}

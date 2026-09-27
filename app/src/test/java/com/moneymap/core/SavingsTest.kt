@@ -1,6 +1,7 @@
 package com.moneymap.core
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -88,5 +89,66 @@ class SavingsTest {
         assertTrue(Spending.breakdown(emptyList()).isEmpty())
         assertEquals(ExpenseCategory.OTHER, ExpenseCategory.parse(null))
         assertEquals(ExpenseCategory.FOOD, ExpenseCategory.parse("FOOD"))
+    }
+}
+
+class OneOffAndSearchTest {
+    private fun d(y: Int, m: Int, day: Int) = LocalDate.of(y, m, day)
+
+    private fun engineWith(vararg o: OneOff) = PlanEngine(DefaultPlan.settings.copy(oneOffs = o.toList()))
+
+    @Test
+    fun oneOffInSingleCycle() {
+        val premium = OneOff("p", "Car insurance", 18_000, d(2027, 3, 10), fundFrom = d(2026, 9, 25))
+        val e = engineWith(premium)
+        // Due 10 Mar 2027 falls in the Feb 2027 cycle.
+        assertEquals(76_700L - 18_000L, e.budget(d(2027, 2, 25)).emergencyPod)
+        assertEquals(18_000L, e.budget(d(2027, 2, 25)).pod("Car insurance pod"))
+        assertEquals(76_700L, e.budget(d(2027, 3, 25)).emergencyPod)
+        val items = e.items(d(2027, 2, 25))
+        assertEquals(d(2027, 3, 10), items.first { it.id == "2027-03-10:oneoff-p" }.date)
+        assertEquals("Car insurance pod", items.first { it.id == "2027-03-10:move-oneoff-p" }.pod)
+        assertTrue(items.first { it.kind == ItemKind.SALARY_DAY }.steps.any { it == "Car insurance pod: ₹18,000" })
+    }
+
+    @Test
+    fun oneOffSpreadOverCycles() {
+        val trip = OneOff("t", "Goa trip", 30_001, d(2027, 5, 1), spreadCycles = 3, fundFrom = d(2026, 9, 25))
+        assertEquals(listOf(d(2027, 2, 25), d(2027, 3, 25), d(2027, 4, 25)), trip.fundingCycles())
+        assertEquals(10_000L, trip.fundingFor(d(2027, 2, 25)))
+        assertEquals(10_001L, trip.fundingFor(d(2027, 4, 25)))
+        assertEquals(0L, trip.fundingFor(d(2027, 1, 25)))
+        val e = engineWith(trip)
+        assertEquals(66_700L, e.budget(d(2027, 2, 25)).emergencyPod)
+        assertEquals(76_700L, e.budget(d(2027, 5, 25)).emergencyPod)
+    }
+
+    @Test
+    fun oneOffNeverFundsPastCycles() {
+        // Planned in the Mar 2027 cycle for 6 cycles, but due in the Apr cycle: only Mar and Apr can save.
+        val o = OneOff("x", "Phone", 20_000, d(2027, 5, 5), spreadCycles = 6, fundFrom = d(2027, 3, 26))
+        assertEquals(listOf(d(2027, 3, 25), d(2027, 4, 25)), o.fundingCycles())
+        assertEquals(10_000L, o.fundingFor(d(2027, 3, 25)))
+    }
+
+    @Test
+    fun oneOffTickMovesPods() {
+        val o = OneOff("p", "Car insurance", 18_000, d(2027, 3, 10), fundFrom = d(2026, 9, 25))
+        val e = engineWith(o)
+        val cycle = d(2027, 2, 25)
+        val items = e.items(cycle)
+        val moves = Pods.movesForTick(items.first { it.kind == ItemKind.SALARY_DAY }, e.budget(cycle)) +
+            Pods.movesForTick(items.first { it.id.endsWith("move-oneoff-p") }, e.budget(cycle))
+        assertEquals(0L, Pods.balanceOf(moves, "Car insurance pod"))
+    }
+
+    @Test
+    fun searchMatchesTextAndAmounts() {
+        assertTrue(Search.matches("friend emi", listOf("Friend", "2 loan EMIs")))
+        assertTrue(Search.matches("1,500", listOf("Petrol"), listOf(1_500)))
+        assertTrue(Search.matches("₹1500", listOf("Petrol"), listOf(1_500)))
+        assertTrue(Search.matches("15", listOf("Petrol"), listOf(1_500)))
+        assertFalse(Search.matches("food 900", listOf("Food"), listOf(1_500)))
+        assertFalse(Search.matches("   ", listOf("Anything")))
     }
 }

@@ -21,6 +21,7 @@ import com.moneymap.data.AppLock
 import com.moneymap.data.AutoBackup
 import com.moneymap.data.Backup
 import com.moneymap.data.Expense
+import com.moneymap.data.UiPrefs
 import com.moneymap.notify.AlarmReceiver
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -63,6 +64,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _addEntry = MutableStateFlow(false)
     /** Open the add lent/borrowed form (launcher shortcut). */
     val addEntry: StateFlow<Boolean> = _addEntry.asStateFlow()
+
+    private val _dynamicColor = MutableStateFlow(UiPrefs.dynamicColor(app))
+    /** Material You colours from the wallpaper (Android 12+). */
+    val dynamicColor: StateFlow<Boolean> = _dynamicColor.asStateFlow()
+
+    fun setDynamicColor(enabled: Boolean) {
+        UiPrefs.setDynamicColor(getApplication(), enabled)
+        _dynamicColor.value = enabled
+    }
 
     private val _lockEnabled = MutableStateFlow(AppLock.isEnabled(app))
     val lockEnabled: StateFlow<Boolean> = _lockEnabled.asStateFlow()

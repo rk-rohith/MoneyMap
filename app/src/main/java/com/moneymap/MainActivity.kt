@@ -14,6 +14,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.fragment.app.FragmentActivity
 import com.moneymap.data.AppLock
 import com.moneymap.ui.LockScreen
@@ -44,7 +45,8 @@ class MainActivity : FragmentActivity() {
         applyRecentsPrivacy()
         if (savedInstanceState == null) handleIntent(intent)
         setContent {
-            MoneyMapTheme {
+            val dynamicColor by viewModel.dynamicColor.collectAsStateWithLifecycle()
+            MoneyMapTheme(dynamicColor = dynamicColor) {
                 if (locked) LockScreen(onUnlock = ::authenticate)
                 else MoneyMapRoot(viewModel, onLockChanged = ::onLockSettingChanged)
             }

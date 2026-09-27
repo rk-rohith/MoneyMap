@@ -13,6 +13,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material3.DropdownMenu
@@ -65,6 +66,8 @@ fun MoneyMapRoot(vm: MainViewModel, onLockChanged: (Boolean) -> Boolean = { true
     val goals by vm.goals.collectAsStateWithLifecycle()
     val backup by vm.backup.collectAsStateWithLifecycle()
     var settingsOpen by rememberSaveable { mutableStateOf(false) }
+    var searchOpen by rememberSaveable { mutableStateOf(false) }
+    val dynamicColor by vm.dynamicColor.collectAsStateWithLifecycle()
     val quickAdd by vm.quickAdd.collectAsStateWithLifecycle()
     val addEntryRequest by vm.addEntry.collectAsStateWithLifecycle()
     val reminderPrefs by vm.reminderPrefs.collectAsStateWithLifecycle()
@@ -125,6 +128,7 @@ fun MoneyMapRoot(vm: MainViewModel, onLockChanged: (Boolean) -> Boolean = { true
             tab = 2
             formOpen = false
             settingsOpen = false
+            searchOpen = false
             detailId = req.entryId
             recordOnOpen = req.record
         }
@@ -175,10 +179,22 @@ fun MoneyMapRoot(vm: MainViewModel, onLockChanged: (Boolean) -> Boolean = { true
             onSaveReminders = { vm.saveReminderPrefs(it) },
             lockEnabled = lockEnabled,
             onLockChange = { enabled -> vm.lockChanged(enabled, onLockChanged(enabled)) },
+            dynamicColor = dynamicColor,
+            onDynamicColorChange = { vm.setDynamicColor(it) },
         )
         ImportConfirm(confirmImport, onDismiss = { confirmImport = false }) {
             importLauncher.launch(arrayOf("application/json", "text/plain", "application/octet-stream"))
         }
+        return
+    }
+
+    if (searchOpen && !formOpen && detailId == null) {
+        BackHandler { searchOpen = false }
+        SearchScreen(
+            entries = entries, expenses = expenses, podMoves = podMoves,
+            onOpenEntry = { detailId = it },
+            onBack = { searchOpen = false },
+        )
         return
     }
 
@@ -219,6 +235,7 @@ fun MoneyMapRoot(vm: MainViewModel, onLockChanged: (Boolean) -> Boolean = { true
             TopAppBar(
                 title = { Text(tabs[tab].label) },
                 actions = {
+                    IconButton(onClick = { searchOpen = true }) { Icon(Icons.Filled.Search, contentDescription = "Search") }
                     IconButton(onClick = { menuOpen = true }) { Icon(Icons.Filled.MoreVert, contentDescription = "More") }
                     DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                         DropdownMenuItem(text = { Text("Settings & plan") }, onClick = {

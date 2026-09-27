@@ -2,6 +2,7 @@ package com.moneymap.data
 
 import com.moneymap.core.DebtInstalment
 import com.moneymap.core.Flow
+import com.moneymap.core.OneOff
 import com.moneymap.core.PlanConfig
 import com.moneymap.core.PlanSettings
 import com.moneymap.core.PlanVersion
@@ -28,6 +29,14 @@ object PlanJson {
         put("debt", JSONArray().apply {
             s.debt.sortedBy { it.date }.forEach { d ->
                 put(JSONObject().apply { put("date", d.date.toString()); put("amount", d.amount) })
+            }
+        })
+        put("oneOffs", JSONArray().apply {
+            s.oneOffs.sortedBy { it.date }.forEach { o ->
+                put(JSONObject().apply {
+                    put("id", o.id); put("title", o.title); put("amount", o.amount); put("date", o.date.toString())
+                    put("spreadCycles", o.spreadCycles); put("fundFrom", o.fundFrom.toString())
+                })
             }
         })
     }
@@ -66,7 +75,18 @@ object PlanJson {
         val debt = o.optJSONArray("debt")?.objects().orEmpty().map {
             DebtInstalment(LocalDate.parse(it.getString("date")), it.getLong("amount"))
         }
-        return PlanSettings(versions, debt)
+        val oneOffs = o.optJSONArray("oneOffs")?.objects().orEmpty().map {
+            val date = LocalDate.parse(it.getString("date"))
+            OneOff(
+                id = it.getString("id"),
+                title = it.getString("title"),
+                amount = it.getLong("amount"),
+                date = date,
+                spreadCycles = it.optInt("spreadCycles", 1),
+                fundFrom = it.dateOrNull("fundFrom") ?: date,
+            )
+        }
+        return PlanSettings(versions, debt, oneOffs)
     }
 
     fun encode(s: PlanSettings): String = toJson(s).toString()

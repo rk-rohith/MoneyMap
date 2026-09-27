@@ -3,10 +3,14 @@ package com.moneymap.ui.theme
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.dynamicDarkColorScheme
+import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import android.os.Build
 
 private val Light = lightColorScheme(
     primary = Color(0xFF0F6B43),
@@ -46,7 +50,17 @@ object MoneyColors {
         @Composable @ReadOnlyComposable get() = MaterialTheme.colorScheme.error
 }
 
+/** Material You (wallpaper colours) needs Android 12+. */
+val dynamicColorSupported: Boolean get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+
 @Composable
-fun MoneyMapTheme(content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = if (isSystemInDarkTheme()) Dark else Light, content = content)
+fun MoneyMapTheme(dynamicColor: Boolean = false, content: @Composable () -> Unit) {
+    val dark = isSystemInDarkTheme()
+    val scheme = if (dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        val context = LocalContext.current
+        if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+    } else {
+        if (dark) Dark else Light
+    }
+    MaterialTheme(colorScheme = scheme, content = content)
 }
