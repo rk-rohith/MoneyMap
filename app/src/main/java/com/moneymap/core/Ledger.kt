@@ -127,4 +127,32 @@ object Ledger {
 
     fun people(all: List<EntryWithTxns>): List<String> =
         all.map { it.entry.person.trim() }.filter { it.isNotEmpty() }.distinctBy { personKey(it) }.sorted()
+
+    /**
+     * Friendly reminder to send to someone who owes me, listing each open item.
+     * Returns null when they owe nothing.
+     */
+    fun reminderMessage(all: List<EntryWithTxns>, person: String): String? {
+        val open = all.filter {
+            personKey(it.entry.person) == personKey(person) && it.entry.direction == Direction.LENT &&
+                it.status != EntryStatus.SETTLED
+        }.sortedBy { it.entry.date }
+        if (open.isEmpty()) return null
+        val name = open.first().entry.person.trim()
+        val total = open.sumOf { it.outstanding }
+        val due = open.mapNotNull { it.entry.dueDate }.minOrNull()
+        return buildString {
+            append("Hi $name, a gentle reminder: ${formatInr(total)} is pending")
+            if (due != null) append(", due ${due.long()}")
+            append(".")
+            if (open.size > 1 || open.first().entry.reason.isNotBlank()) {
+                append("\n")
+                open.forEach { e ->
+                    append("\n• ${e.entry.reason.ifBlank { "Amount" }}: ${formatInr(e.outstanding)}")
+                    if (e.settled > 0) append(" (of ${formatInr(e.entry.amount)})")
+                }
+            }
+            append("\n\nThanks!")
+        }
+    }
 }

@@ -24,14 +24,24 @@ data class Reminder(
 
 data class NotificationText(val title: String, val text: String)
 
+/** User-adjustable reminder times and switches. Defaults match the original plan. */
+data class ReminderPrefs(
+    val paymentsEnabled: Boolean = true,
+    val eveningBeforeEnabled: Boolean = true,
+    val eveningBefore: LocalTime = LocalTime.of(20, 0),
+    val morningEnabled: Boolean = true,
+    val morning: LocalTime = LocalTime.of(9, 0),
+    val eveningEnabled: Boolean = true,
+    val evening: LocalTime = LocalTime.of(19, 0),
+    val ledgerEnabled: Boolean = true,
+    val ledger: LocalTime = LocalTime.of(9, 30),
+    val weeklyEnabled: Boolean = true,
+    val weekly: LocalTime = LocalTime.of(10, 0),
+)
+
 /** Decides which reminders exist and what they say. Pure logic so it can be unit tested. */
 object ReminderPlanner {
     const val HORIZON_DAYS = 92L
-    val EVENING_BEFORE_TIME: LocalTime = LocalTime.of(20, 0)
-    val MORNING_TIME: LocalTime = LocalTime.of(9, 0)
-    val EVENING_TIME: LocalTime = LocalTime.of(19, 0)
-    val LEDGER_TIME: LocalTime = LocalTime.of(9, 30)
-    val WEEKLY_TIME: LocalTime = LocalTime.of(10, 0)
     const val DUE_REPEAT_DAYS = 3L
 
     fun plan(
@@ -39,6 +49,7 @@ object ReminderPlanner {
         done: Set<String>,
         entries: List<EntryWithTxns>,
         engine: PlanEngine = DefaultPlan.engine,
+        prefs: ReminderPrefs = ReminderPrefs(),
     ): List<Reminder> {
         val today = now.toLocalDate()
         val horizon = today.plusDays(HORIZON_DAYS)
@@ -46,13 +57,20 @@ object ReminderPlanner {
 
         // Payments: 8 pm the evening before, 9 am on the day, 7 pm on the day.
         val from = maxOf(today, Plan.TRACK_START)
-        for (item in engine.itemsBetween(from, horizon)) {
+        val slots = buildList {
+            if (prefs.eveningBeforeEnabled) add(Slot.EVENING_BEFORE)
+            if (prefs.morningEnabled) add(Slot.MORNING)
+            if (prefs.eveningEnabled) add(Slot.EVENING)
+        }
+        for (item in if (prefs.paymentsEnabled) engine.itemsBetween(from, horizon) else emptyList()) {
             if (!item.notifies || item.id in done) continue
-            listOf(
-                Slot.EVENING_BEFORE to item.date.minusDays(1).atTime(EVENING_BEFORE_TIME),
-                Slot.MORNING to item.date.atTime(MORNING_TIME),
-                Slot.EVENING to item.date.atTime(EVENING_TIME),
-            ).forEach { (slot, at) ->
+            slots.map { slot ->
+                slot to when (slot) {
+                    Slot.EVENING_BEFORE -> item.date.minusDays(1).atTime(prefs.eveningBefore)
+                    Slot.MORNING -> item.date.atTime(prefs.morning)
+                    else -> item.date.atTime(prefs.evening)
+                }
+            }.forEach { (slot, at) ->
                 if (at.isAfter(now)) {
                     out += Reminder("pay:${item.id}:$slot", at, ReminderType.PAYMENT, slot, itemId = item.id)
                 }
@@ -60,7 +78,7 @@ object ReminderPlanner {
         }
 
         // Ledger: 3 days before, on the due date, then every 3 days while open.
-        entries.filter { it.entry.dueDate != null && it.status != EntryStatus.SETTLED }
+        entries.filter { prefs.ledgerEnabled && it.entry.dueDate != null && it.status != EntryStatus.SETTLED }
             .groupBy { Triple(Ledger.personKey(it.entry.person), it.entry.direction, it.entry.dueDate!!) }
             .forEach { (k, list) ->
                 val (personKey, direction, due) = k
@@ -77,7 +95,7 @@ object ReminderPlanner {
                     d = d.plusDays(DUE_REPEAT_DAYS)
                 }
                 for ((date, slot) in dates) {
-                    val at = date.atTime(LEDGER_TIME)
+                    val at = date.atTime(prefs.ledger)
                     if (at.isAfter(now)) {
                         out += Reminder("due:$personKey:$direction:$due:$date", at, ReminderType.LEDGER_DUE, slot,
                             person = person, direction = direction, dueDate = due)
@@ -87,8 +105,8 @@ object ReminderPlanner {
 
         // Weekly: Sundays at 10 am.
         var sunday = today.with(TemporalAdjusters.nextOrSame(DayOfWeek.SUNDAY))
-        while (!sunday.isAfter(horizon)) {
-            val at = sunday.atTime(WEEKLY_TIME)
+        while (prefs.weeklyEnabled && !sunday.isAfter(horizon)) {
+            val at = sunday.atTime(prefs.weekly)
             if (at.isAfter(now)) out += Reminder("weekly:$sunday", at, ReminderType.WEEKLY, Slot.WEEKLY)
             sunday = sunday.plusWeeks(1)
         }

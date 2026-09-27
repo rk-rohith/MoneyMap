@@ -21,13 +21,14 @@ object AlarmScheduler {
     private val mutex = Mutex()
 
     suspend fun rescheduleAll(context: Context, repo: MoneyRepository) = mutex.withLock {
-        val reminders = ReminderPlanner.plan(LocalDateTime.now(), repo.doneNow(), repo.entriesNow(), repo.planNow())
+        val reminders = ReminderPlanner.plan(LocalDateTime.now(), repo.doneNow(), repo.entriesNow(), repo.planNow(), repo.reminderPrefsNow())
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val old = prefs.getStringSet(KEY_SCHEDULED, emptySet()).orEmpty()
         val newKeys = reminders.map { it.key }.toSet()
         (old - newKeys).forEach { cancel(context, it) }
         reminders.forEach { schedule(context, it) }
         prefs.edit().putStringSet(KEY_SCHEDULED, newKeys).apply()
+        MoneyWidget.updateAll(context, repo)
     }
 
     fun schedule(context: Context, reminder: Reminder, keyOverride: String? = null, atMillis: Long? = null) {

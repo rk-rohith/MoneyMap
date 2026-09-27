@@ -53,7 +53,7 @@ private val tabs = listOf(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MoneyMapRoot(vm: MainViewModel) {
+fun MoneyMapRoot(vm: MainViewModel, onLockChanged: (Boolean) -> Boolean = { true }) {
     val context = LocalContext.current
     val entries by vm.entries.collectAsStateWithLifecycle()
     val done by vm.doneIds.collectAsStateWithLifecycle()
@@ -65,6 +65,10 @@ fun MoneyMapRoot(vm: MainViewModel) {
     val goals by vm.goals.collectAsStateWithLifecycle()
     val backup by vm.backup.collectAsStateWithLifecycle()
     var settingsOpen by rememberSaveable { mutableStateOf(false) }
+    val quickAdd by vm.quickAdd.collectAsStateWithLifecycle()
+    val addEntryRequest by vm.addEntry.collectAsStateWithLifecycle()
+    val reminderPrefs by vm.reminderPrefs.collectAsStateWithLifecycle()
+    val lockEnabled by vm.lockEnabled.collectAsStateWithLifecycle()
 
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var detailId by rememberSaveable { mutableStateOf<Long?>(null) }
@@ -129,6 +133,29 @@ fun MoneyMapRoot(vm: MainViewModel) {
 
     val openForm: (Long?) -> Unit = { id -> formEditId = id; formOpen = true }
 
+    LaunchedEffect(addEntryRequest) {
+        if (addEntryRequest) {
+            settingsOpen = false
+            detailId = null
+            tab = 2
+            openForm(null)
+            vm.consumeAddEntry()
+        }
+    }
+    if (quickAdd) {
+        val cycle = com.moneymap.core.Plan.cycleStartFor(today)
+        val end = com.moneymap.core.Plan.cycleEnd(cycle)
+        val spent = expenses.filter { !it.date.isBefore(cycle) && !it.date.isAfter(end) }.sumOf { it.amount }
+        QuickAddDialog(
+            leftToSpend = plan.spendBudget(cycle) - spent,
+            onDismiss = { vm.dismissQuickAdd() },
+            onAdd = { amount, note, category ->
+                vm.addExpense(amount, note, category)
+                vm.dismissQuickAdd()
+            },
+        )
+    }
+
     if (settingsOpen) {
         BackHandler { settingsOpen = false }
         SettingsScreen(
@@ -144,6 +171,10 @@ fun MoneyMapRoot(vm: MainViewModel) {
             onExport = { vm.export() },
             onImport = { confirmImport = true },
             onTestNotification = { vm.sendTestNotification() },
+            reminderPrefs = reminderPrefs,
+            onSaveReminders = { vm.saveReminderPrefs(it) },
+            lockEnabled = lockEnabled,
+            onLockChange = { enabled -> vm.lockChanged(enabled, onLockChanged(enabled)) },
         )
         ImportConfirm(confirmImport, onDismiss = { confirmImport = false }) {
             importLauncher.launch(arrayOf("application/json", "text/plain", "application/octet-stream"))

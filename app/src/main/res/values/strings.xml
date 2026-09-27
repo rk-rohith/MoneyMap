@@ -1,3 +1,12 @@
 <resources>
     <string name="app_name">Money map</string>
+    <string name="widget_description">Next payment, money left to spend and what others owe you</string>
+    <string name="widget_next_label">Next up</string>
+    <string name="widget_add_expense">+ Expense</string>
+    <string name="widget_left_label">Left to spend</string>
+    <string name="widget_owed_label">Others owe you</string>
+    <string name="shortcut_log_expense">Log expense</string>
+    <string name="shortcut_log_expense_long">Log an expense</string>
+    <string name="shortcut_add_entry">Lend / borrow</string>
+    <string name="shortcut_add_entry_long">Add money lent or borrowed</string>
 </resources>

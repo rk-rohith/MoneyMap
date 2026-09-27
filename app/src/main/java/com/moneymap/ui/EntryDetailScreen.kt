@@ -21,6 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -42,11 +43,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.moneymap.core.Direction
 import com.moneymap.core.EntryStatus
 import com.moneymap.core.EntryWithTxns
+import com.moneymap.core.Ledger
 import com.moneymap.core.LedgerTxn
 import com.moneymap.core.TxnType
 import com.moneymap.core.formatInr
@@ -69,6 +72,7 @@ fun EntryDetailScreen(
     onUndo: () -> Unit,
 ) {
     val e = data.entry
+    val context = LocalContext.current
     val lent = e.direction == Direction.LENT
     var recording by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
@@ -89,6 +93,11 @@ fun EntryDetailScreen(
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
                 },
                 actions = {
+                    Ledger.reminderMessage(listOf(data), e.person)?.let { msg ->
+                        IconButton(onClick = { shareText(context, msg) }) {
+                            Icon(Icons.Filled.Share, contentDescription = "Send a reminder")
+                        }
+                    }
                     IconButton(onClick = onEdit) { Icon(Icons.Filled.Edit, contentDescription = "Edit") }
                     IconButton(onClick = { confirmDelete = true }) { Icon(Icons.Filled.Delete, contentDescription = "Delete") }
                 },

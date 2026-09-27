@@ -51,6 +51,7 @@ android {
     }
     testOptions {
         unitTests.isReturnDefaultValues = true
+        unitTests.isIncludeAndroidResources = true
     }
 }
 
@@ -69,6 +70,8 @@ dependencies {
 
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.activity:activity-compose:1.9.3")
+    implementation("androidx.fragment:fragment-ktx:1.8.5")
+    implementation("androidx.biometric:biometric:1.1.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
@@ -83,4 +86,20 @@ dependencies {
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
     // Real org.json for JVM tests (android.jar only has stubs).
     testImplementation("org.json:json:20240303")
+
+    // Screenshot tests (run with -Pscreenshots), rendered on the JVM by Robolectric + Roborazzi.
+    testImplementation(composeBom)
+    testImplementation("androidx.compose.ui:ui-test-junit4")
+    testImplementation("androidx.test.ext:junit:1.2.1")
+    testImplementation("org.robolectric:robolectric:4.14.1")
+    testImplementation("io.github.takahirom.roborazzi:roborazzi:1.32.2")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
+}
+
+// Screenshot tests only run when asked: ./gradlew testDebugUnitTest -Pscreenshots
+val screenshots = project.hasProperty("screenshots")
+tasks.withType<Test>().configureEach {
+    systemProperty("roborazzi.test.record", screenshots.toString())
+    if (!screenshots) exclude("**/ScreenshotTest*")
+    else filter.includeTestsMatching("com.moneymap.ScreenshotTest")
 }

@@ -53,6 +53,7 @@ import com.moneymap.core.Plan
 import com.moneymap.core.PlanEngine
 import com.moneymap.core.PlanSettings
 import com.moneymap.core.RecurringItem
+import com.moneymap.core.ReminderPrefs
 import com.moneymap.core.formatInr
 import com.moneymap.core.long
 import com.moneymap.core.monthYear
@@ -81,6 +82,10 @@ fun SettingsScreen(
     onExport: () -> Unit,
     onImport: () -> Unit,
     onTestNotification: () -> Unit,
+    reminderPrefs: ReminderPrefs = ReminderPrefs(),
+    onSaveReminders: (ReminderPrefs) -> Unit = {},
+    lockEnabled: Boolean = false,
+    onLockChange: (Boolean) -> Unit = {},
 ) {
     Scaffold(
         topBar = {
@@ -98,6 +103,19 @@ fun SettingsScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             PlanEditor(today, plan, onSavePlan)
+
+            ReminderSettings(reminderPrefs, onSaveReminders)
+
+            OutlinedCard(Modifier.fillMaxWidth()) {
+                Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("App lock", style = MaterialTheme.typography.titleMedium)
+                        Text("Ask for fingerprint, face or screen lock when opening the app.",
+                            style = MaterialTheme.typography.bodySmall)
+                    }
+                    Switch(checked = lockEnabled, onCheckedChange = onLockChange)
+                }
+            }
 
             OutlinedCard(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {

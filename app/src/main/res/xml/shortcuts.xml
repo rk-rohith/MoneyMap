@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_expense"
+        android:shortcutId="log_expense"
+        android:shortcutLongLabel="@string/shortcut_log_expense_long"
+        android:shortcutShortLabel="@string/shortcut_log_expense">
+        <intent
+            android:action="com.moneymap.action.QUICK_ADD"
+            android:targetClass="com.moneymap.MainActivity"
+            android:targetPackage="com.moneymap" />
+    </shortcut>
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_person"
+        android:shortcutId="add_person_entry"
+        android:shortcutLongLabel="@string/shortcut_add_entry_long"
+        android:shortcutShortLabel="@string/shortcut_add_entry">
+        <intent
+            android:action="com.moneymap.action.ADD_ENTRY"
+            android:targetClass="com.moneymap.MainActivity"
+            android:targetPackage="com.moneymap" />
+    </shortcut>
+</shortcuts>

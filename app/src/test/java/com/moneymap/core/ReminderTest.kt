@@ -75,3 +75,45 @@ class ReminderTest {
         assertFalse(t.text.isEmpty())
     }
 }
+
+class ReminderPrefsTest {
+    private val now = LocalDateTime.of(2026, 9, 27, 12, 0)
+
+    @Test
+    fun customTimesAndSwitches() {
+        val prefs = ReminderPrefs(eveningBeforeEnabled = false, morning = java.time.LocalTime.of(7, 30), weeklyEnabled = false)
+        val r = ReminderPlanner.plan(now, emptySet(), emptyList(), prefs = prefs)
+        val car = r.filter { it.itemId == "2026-10-17:car-emi" }
+        assertEquals(listOf(LocalDateTime.of(2026, 10, 17, 7, 30), LocalDateTime.of(2026, 10, 17, 19, 0)), car.map { it.at })
+        assertTrue(r.none { it.type == ReminderType.WEEKLY })
+        assertTrue(ReminderPlanner.plan(now, emptySet(), emptyList(), prefs = ReminderPrefs(paymentsEnabled = false))
+            .none { it.type == ReminderType.PAYMENT })
+    }
+
+    @Test
+    fun ledgerSwitchAndTime() = runTest {
+        val store = InMemoryLedgerStore()
+        LedgerService(store).seedIfEmpty()
+        val entries = store.allEntries()
+        assertTrue(ReminderPlanner.plan(now, emptySet(), entries, prefs = ReminderPrefs(ledgerEnabled = false))
+            .none { it.type == ReminderType.LEDGER_DUE })
+        val due = ReminderPlanner.plan(now, emptySet(), entries, prefs = ReminderPrefs(ledger = java.time.LocalTime.of(18, 0)))
+            .filter { it.type == ReminderType.LEDGER_DUE }
+        assertTrue(due.isNotEmpty() && due.all { it.at.hour == 18 })
+    }
+
+    @Test
+    fun shareMessageListsOpenItems() = runTest {
+        val store = InMemoryLedgerStore()
+        val service = LedgerService(store)
+        service.seedIfEmpty()
+        val friendLoan = store.allEntries().first { it.entry.seedKey == "friend-loan-emi" }
+        service.recordSettlement(friendLoan.entry.id, 4_282, LocalDate.of(2026, 10, 1))
+        val msg = Ledger.reminderMessage(store.allEntries(), "friend")!!
+        assertTrue(msg.startsWith("Hi Friend, a gentle reminder: ₹46,016 is pending, due 15 Nov 2026."))
+        assertTrue(msg.contains("• 2 loan EMIs: ₹40,000 (of ₹44,282)"))
+        assertTrue(msg.contains("• 2 mobile EMIs: ₹6,016"))
+        assertEquals(null, Ledger.reminderMessage(store.allEntries(), "Samrat"))
+        assertEquals(null, Ledger.reminderMessage(store.allEntries(), "Lender"))
+    }
+}

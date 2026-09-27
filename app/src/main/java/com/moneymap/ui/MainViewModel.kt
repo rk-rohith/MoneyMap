@@ -14,8 +14,10 @@ import com.moneymap.core.LedgerEntry
 import com.moneymap.core.PlanEngine
 import com.moneymap.core.PlanSettings
 import com.moneymap.core.PodMove
+import com.moneymap.core.ReminderPrefs
 import com.moneymap.core.ReturnPod
 import com.moneymap.core.formatInr
+import com.moneymap.data.AppLock
 import com.moneymap.data.AutoBackup
 import com.moneymap.data.Backup
 import com.moneymap.data.Expense
@@ -51,6 +53,38 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         repo.goals.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
     val plan: StateFlow<PlanEngine> =
         repo.plan.stateIn(viewModelScope, SharingStarted.Eagerly, DefaultPlan.engine)
+    val reminderPrefs: StateFlow<ReminderPrefs> =
+        repo.reminderPrefs.stateIn(viewModelScope, SharingStarted.Eagerly, ReminderPrefs())
+
+    private val _quickAdd = MutableStateFlow(false)
+    /** Quick "log expense" dialog, opened from the launcher shortcut, widget or weekly notification. */
+    val quickAdd: StateFlow<Boolean> = _quickAdd.asStateFlow()
+
+    private val _addEntry = MutableStateFlow(false)
+    /** Open the add lent/borrowed form (launcher shortcut). */
+    val addEntry: StateFlow<Boolean> = _addEntry.asStateFlow()
+
+    private val _lockEnabled = MutableStateFlow(AppLock.isEnabled(app))
+    val lockEnabled: StateFlow<Boolean> = _lockEnabled.asStateFlow()
+
+    fun showQuickAdd() { _quickAdd.value = true }
+    fun dismissQuickAdd() { _quickAdd.value = false }
+    fun showAddEntry() { _addEntry.value = true }
+    fun consumeAddEntry() { _addEntry.value = false }
+
+    fun lockChanged(enabled: Boolean, applied: Boolean) {
+        _lockEnabled.value = AppLock.isEnabled(getApplication())
+        when {
+            !applied -> say("Set a screen lock (PIN, pattern or fingerprint) on your phone first")
+            enabled -> say("App lock on")
+            else -> say("App lock off")
+        }
+    }
+
+    fun saveReminderPrefs(prefs: ReminderPrefs) = viewModelScope.launch {
+        repo.saveReminderPrefs(prefs)
+        say("Reminders updated")
+    }
 
     private val _today = MutableStateFlow(LocalDate.now())
     val today: StateFlow<LocalDate> = _today.asStateFlow()

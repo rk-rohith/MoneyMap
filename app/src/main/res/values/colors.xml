@@ -2,4 +2,9 @@
     <color name="launcher_background">#0F5132</color>
     <color name="launcher_foreground">#FFFFFF</color>
     <color name="launcher_accent">#FFC857</color>
+    <color name="widget_bg">#F7FBF6</color>
+    <color name="widget_text">#191C1A</color>
+    <color name="widget_muted">#5B635D</color>
+    <color name="widget_accent">#0F6B43</color>
+    <color name="widget_on_accent">#FFFFFF</color>
 </resources>

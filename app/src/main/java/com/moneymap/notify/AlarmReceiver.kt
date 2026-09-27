@@ -31,6 +31,7 @@ class AlarmReceiver : BroadcastReceiver() {
         app.appScope.launch {
             try {
                 handle(app, app.repository, intent)
+                runCatching { MoneyWidget.updateAll(app, app.repository) }
             } finally {
                 pending.finish()
             }
@@ -101,7 +102,11 @@ class AlarmReceiver : BroadcastReceiver() {
                 val open = Notifications.openAppIntent(context, Notifications.ID_WEEKLY) {
                     putExtra(MainActivity.EXTRA_TAB, 1)
                 }
-                Notifications.show(context, Notifications.ID_WEEKLY, Notifications.CHANNEL_WEEKLY, text.title, text.text, open)
+                val quickAdd = Notifications.openAppIntent(context, Notifications.ID_WEEKLY + 1) {
+                    putExtra(MainActivity.EXTRA_QUICK_ADD, true)
+                }
+                Notifications.show(context, Notifications.ID_WEEKLY, Notifications.CHANNEL_WEEKLY, text.title, text.text, open,
+                    listOf(NotificationCompat.Action(R.drawable.ic_notification, "Log expense", quickAdd)))
             }
         }
     }
