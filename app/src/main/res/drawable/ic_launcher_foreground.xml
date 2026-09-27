@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Folded map -->
+    <path
+        android:fillColor="@color/launcher_foreground"
+        android:pathData="M30,40L46,34L62,40L78,34L78,72L62,78L46,72L30,78Z" />
+    <path
+        android:strokeColor="@color/launcher_background"
+        android:strokeWidth="2"
+        android:pathData="M46,34L46,72M62,40L62,78" />
+    <!-- Coin pin -->
+    <path
+        android:fillColor="@color/launcher_accent"
+        android:pathData="M54,26a10,10 0,1 1,-0.01 0zM54,58L47,42L61,42Z" />
+    <path
+        android:strokeColor="@color/launcher_background"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:pathData="M50,31h8M50,35h8M52,31c4,0 4,4 0,4l5,5" />
+</vector>
