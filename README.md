@@ -32,7 +32,7 @@ CI (`.github/workflows/build-apk.yml`) runs tests, builds, lints and uploads the
   else's equal share becomes money they owe you).
 - **Reports & budgets** (⋮ menu): spending per cycle against budget for the last six cycles, each category against
   its earlier average, monthly budgets per category (heads-up at 80% and when over), and payments that look like
-  they repeat every month with "Add to plan".
+  they repeat every month with "Add to plan", and a PDF report of this or last cycle to share.
 - **Receipts**: tap an expense to attach a photo from the gallery or camera (stored on the phone, scaled down;
   not included in JSON backups).
 - **Net worth, investments & loans** (⋮ menu): net worth (pods + money owed to you + investments − money you owe −

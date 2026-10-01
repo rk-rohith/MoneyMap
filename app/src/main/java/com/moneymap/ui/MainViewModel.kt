@@ -19,11 +19,13 @@ import com.moneymap.core.ReminderPrefs
 import com.moneymap.core.ReturnPod
 import com.moneymap.core.SuggestedExpense
 import com.moneymap.core.formatInr
+import com.moneymap.core.long
 import com.moneymap.data.AppLock
 import com.moneymap.data.AutoBackup
 import com.moneymap.data.Backup
 import com.moneymap.data.BackupPassword
 import com.moneymap.data.Expense
+import com.moneymap.data.toDomain
 import com.moneymap.data.Receipts
 import com.moneymap.data.UiPrefs
 import com.moneymap.notify.AlarmReceiver
@@ -108,6 +110,26 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun applyAutopilot(moves: List<Pair<String, Long>>) = viewModelScope.launch {
         repo.movePods(moves, com.moneymap.ui.AUTOPILOT_NOTE, today.value)
         say("Moved ${formatInr(moves.sumOf { it.second })} into ${moves.size} goal pod${if (moves.size == 1) "" else "s"}")
+    }
+
+    /** Builds the PDF for the cycle starting [cycleStart] and opens the share sheet. */
+    fun shareCycleReport(cycleStart: LocalDate) = viewModelScope.launch {
+        runCatching {
+            val engine = repo.planNow()
+            val day = today.value
+            val expenses = repo.snapshot().expenses.map { it.toDomain() }
+                .map { com.moneymap.core.SpendRecord(it.date, it.amount, it.category, it.note) }
+            val extraPods = com.moneymap.core.Pods.planPods(engine, cycleStart) + repo.goalsNow().map { it.pod }
+            val sections = com.moneymap.core.CycleSummary.build(
+                cycleStart, engine, expenses, repo.doneNow(), com.moneymap.core.Ledger.summary(repo.entriesNow()),
+                com.moneymap.core.Pods.balances(repo.podMovesNow(), extraPods), repo.netWorthNow(), day,
+            )
+            com.moneymap.data.PdfReport.write(
+                getApplication(), "Money map · " + com.moneymap.core.CycleSummary.title(cycleStart),
+                "Made on ${day.long()}", sections, "moneymap-report-$cycleStart.pdf",
+            )
+        }.onSuccess { _exportUris.tryEmit(ExportRequest(listOf(it), null)) }
+            .onFailure { say("Couldn't make the report: ${it.message}") }
     }
 
     fun refreshNetWorth() = viewModelScope.launch { runCatching { repo.recordNetWorth() } }

@@ -90,3 +90,29 @@ class SearchFilterTest {
         org.junit.Assert.assertFalse(SearchFilter().active)
     }
 }
+
+class CycleSummaryTest {
+    @Test
+    fun sectionsCoverPlanSpendingPaymentsPeopleAndPods() {
+        val start = java.time.LocalDate.of(2026, 9, 25)
+        val today = java.time.LocalDate.of(2026, 10, 10)
+        val expenses = listOf(
+            SpendRecord(java.time.LocalDate.of(2026, 9, 30), 1_200, ExpenseCategory.FOOD, "Dinner"),
+            SpendRecord(java.time.LocalDate.of(2026, 10, 2), 800, ExpenseCategory.TRANSPORT, ""),
+            SpendRecord(java.time.LocalDate.of(2026, 10, 30), 5_000, ExpenseCategory.FUN, "Next cycle"),
+        )
+        val sections = CycleSummary.build(start, DefaultPlan.engine, expenses, setOf("2026-10-01:sip-jupiter"),
+            LedgerSummary(5_000, 2_000), listOf(PodBalance("Emergency pod", 10_000, emptyList()), PodBalance("Empty", 0, emptyList())),
+            null, today)
+        assertEquals(listOf("Income and plan", "Spending", "Payments", "People", "Pods"), sections.map { it.title })
+        val spending = sections[1].rows.toMap()
+        assertEquals("₹2,000 of ₹20,000", spending["Spent"])
+        assertEquals("₹18,000", spending["Left"])
+        assertEquals("₹1,200 Dinner", spending["Largest"])
+        val payments = sections[2].rows
+        assertTrue(payments.first().second.startsWith("1 of "))
+        assertTrue(payments.any { it.first == "Not ticked: Term insurance" })
+        assertEquals(listOf("Emergency pod" to "₹10,000", "Total" to "₹10,000"), sections[4].rows)
+        assertEquals("Sep 2026 cycle (25 Sep – 24 Oct 2026)", CycleSummary.title(start))
+    }
+}

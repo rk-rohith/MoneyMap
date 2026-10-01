@@ -262,6 +262,7 @@ fun MoneyMapRoot(vm: MainViewModel, onLockChanged: (Boolean) -> Boolean = { true
             onBack = { reportsOpen = false },
             onSaveBudgets = { vm.saveCategoryBudgets(it) },
             onAddRegular = { vm.addRegularItem(it) },
+            onSharePdf = { vm.shareCycleReport(it) },
         )
         return
     }

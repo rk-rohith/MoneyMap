@@ -67,6 +67,7 @@ fun ReportsScreen(
     onBack: () -> Unit,
     onSaveBudgets: (Map<ExpenseCategory, Long>) -> Unit,
     onAddRegular: (RecurringGuess) -> Unit,
+    onSharePdf: (java.time.LocalDate) -> Unit = {},
 ) {
     val records = expenses.map { SpendRecord(it.date, it.amount, it.category, it.note) }
     val reports = Reports.cycles(records, plan, today)
@@ -93,6 +94,12 @@ fun ReportsScreen(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            item {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            androidx.compose.material3.FilledTonalButton(onClick = { onSharePdf(cycle) }) { Text("PDF: this cycle") }
+                            androidx.compose.material3.OutlinedButton(onClick = { onSharePdf(cycle.minusMonths(1)) }) { Text("Last cycle") }
+                        }
+            }
             item {
                 OutlinedCard(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
