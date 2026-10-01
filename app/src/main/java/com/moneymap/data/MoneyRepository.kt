@@ -332,6 +332,20 @@ class MoneyRepository(
 
     suspend fun deletePodMove(id: Long) = dao.deletePodMove(id)
 
+    /** Moves money from the emergency pod into goal pods in one go. */
+    suspend fun movePods(moves: List<Pair<String, Long>>, note: String, date: LocalDate) {
+        val total = moves.sumOf { it.second }
+        if (total <= 0) return
+        db.withTransaction {
+            dao.insertPodMove(PodMoveEntity(pod = Plan.EMERGENCY_POD, amount = -total, dateEpochDay = date.toEpochDay(),
+                note = note, linkKey = null))
+            moves.forEach { (pod, amount) ->
+                dao.insertPodMove(PodMoveEntity(pod = pod, amount = amount, dateEpochDay = date.toEpochDay(), note = note, linkKey = null))
+            }
+        }
+        onChanged()
+    }
+
     suspend fun saveGoal(goal: Goal) {
         dao.upsertGoal(goal.copy(createdAt = goal.createdAt.takeIf { it > 0 } ?: System.currentTimeMillis()).toEntity())
     }

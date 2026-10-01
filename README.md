@@ -39,6 +39,8 @@ CI (`.github/workflows/build-apk.yml`) runs tests, builds, lints and uploads the
   loan balances) with a month-by-month trend; SIPs, FDs, stocks, gold and PPF with invested vs current value (units ×
   NAV or a typed value) and a "record this month's SIP" button; a loan planner with the full EMI schedule, payoff
   date, interest left, and what a prepayment would save.
+- **Goal autopilot** (Save): splits this cycle's spare money (the emergency pod's share) across goals — enough to
+  keep dated goals on schedule, half of the rest to undated goals — and moves it into the goal pods in one tap.
 - **People**: money lent and borrowed, partial returns, reminders on due dates.
 - **Save**: pod balances (filled by ticking the salary-day routine, emptied by debt/pod-move ticks, topped up by returns) and goals with "save ₹X per cycle".
 - **Home-screen widgets**: a summary widget (next payment, what's left to spend, what others owe, + Expense) and a

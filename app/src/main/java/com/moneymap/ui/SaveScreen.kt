@@ -28,6 +28,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -66,6 +67,7 @@ fun SaveScreen(
     onSaveGoal: (Goal) -> Unit,
     onDeleteGoal: (Long) -> Unit,
     modifier: Modifier = Modifier,
+    onApplyAutopilot: (List<Pair<String, Long>>) -> Unit = {},
 ) {
     val planPods = Pods.planPods(plan, Plan.cycleStartFor(today))
     val balances = Pods.balances(podMoves, planPods + goals.map { it.pod })
@@ -96,6 +98,9 @@ fun SaveScreen(
         }
         items(goals, key = { "goal-${it.id}" }) { g ->
             GoalCard(g, Pods.balanceOf(podMoves, g.pod), today, onEdit = { goalDialog = g }, onDelete = { deleteGoal = g })
+        }
+        if (goals.isNotEmpty()) {
+            item { AutopilotCard(today, plan, podMoves, goals, onApplyAutopilot) }
         }
         item {
             Text("Pods", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(top = 8.dp))
@@ -278,3 +283,55 @@ private fun GoalDialog(existing: Goal?, pods: List<String>, onDismiss: () -> Uni
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
 }
+
+/** Suggests how to split this cycle's spare money (the emergency pod's share) across goals, and moves it on tap. */
+@Composable
+private fun AutopilotCard(
+    today: LocalDate,
+    plan: PlanEngine,
+    podMoves: List<PodMove>,
+    goals: List<Goal>,
+    onApply: (List<Pair<String, Long>>) -> Unit,
+) {
+    val cycle = Plan.cycleStartFor(today)
+    val spare = plan.budget(cycle).emergencyPod
+    val progress = goals.map { Pods.goalProgress(it, Pods.balanceOf(podMoves, it.pod), today) }
+    val autopilot = com.moneymap.core.GoalAutopilot.plan(progress, spare)
+    val applied = podMoves.firstOrNull {
+        it.note == AUTOPILOT_NOTE && !it.date.isBefore(cycle) && !it.date.isAfter(Plan.cycleEnd(cycle))
+    }
+    OutlinedCard(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("Goal autopilot", style = MaterialTheme.typography.titleMedium)
+            Text(
+                if (spare <= 0) "Nothing spare this cycle: the plan leaves ${formatInr(spare)} for the ${Plan.EMERGENCY_POD.lowercase()}."
+                else "This cycle ${formatInr(spare)} goes to the ${Plan.EMERGENCY_POD.lowercase()}. Suggested split:",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            autopilot.allocations.forEach { a ->
+                Row {
+                    Text(a.goal.name, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                    Text(formatInr(a.suggested) + (a.needed?.let { " of ${formatInr(it)} needed" } ?: ""),
+                        style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+            if (autopilot.shortBy > 0) {
+                Text("Short by ${formatInr(autopilot.shortBy)} to keep every dated goal on time.",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+            }
+            if (autopilot.total > 0) {
+                Text("Keeps ${formatInr(autopilot.keep)} in the ${Plan.EMERGENCY_POD.lowercase()}.", style = MaterialTheme.typography.bodySmall)
+                if (applied != null) {
+                    Text("Already moved on ${applied.date.long()} this cycle.", style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary)
+                } else {
+                    FilledTonalButton(onClick = {
+                        onApply(autopilot.allocations.filter { it.suggested > 0 }.map { it.goal.pod to it.suggested })
+                    }) { Text("Move ${formatInr(autopilot.total)} to goal pods") }
+                }
+            }
+        }
+    }
+}
+
+const val AUTOPILOT_NOTE = "Goal autopilot"

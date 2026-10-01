@@ -379,6 +379,7 @@ fun MoneyMapRoot(vm: MainViewModel, onLockChanged: (Boolean) -> Boolean = { true
                 onDeletePodMove = { vm.deletePodMove(it) },
                 onSaveGoal = { vm.saveGoal(it) },
                 onDeleteGoal = { vm.deleteGoal(it) },
+                onApplyAutopilot = { vm.applyAutopilot(it) },
             )
             else -> PeopleScreen(
                 entries = entries, today = today, modifier = mod,

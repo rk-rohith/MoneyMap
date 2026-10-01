@@ -105,6 +105,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         say("Card bills updated")
     }
 
+    fun applyAutopilot(moves: List<Pair<String, Long>>) = viewModelScope.launch {
+        repo.movePods(moves, com.moneymap.ui.AUTOPILOT_NOTE, today.value)
+        say("Moved ${formatInr(moves.sumOf { it.second })} into ${moves.size} goal pod${if (moves.size == 1) "" else "s"}")
+    }
+
     fun refreshNetWorth() = viewModelScope.launch { runCatching { repo.recordNetWorth() } }
 
     val categoryBudgets: StateFlow<Map<ExpenseCategory, Long>> =

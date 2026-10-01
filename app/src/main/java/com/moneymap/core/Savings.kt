@@ -137,3 +137,41 @@ object Split {
         return mine to people.map { SplitShare(it, each) }
     }
 }
+
+/** How much of this cycle's spare money to move into one goal's pod. */
+data class GoalAllocation(val goal: Goal, val needed: Long?, val suggested: Long)
+
+data class AutopilotPlan(val available: Long, val allocations: List<GoalAllocation>) {
+    val total: Long get() = allocations.sumOf { it.suggested }
+    val keep: Long get() = available - total
+    /** Money missing to keep every dated goal on schedule this cycle. */
+    val shortBy: Long get() = (allocations.sumOf { it.needed ?: 0 } - allocations.filter { it.needed != null }.sumOf { it.suggested }).coerceAtLeast(0)
+}
+
+object GoalAutopilot {
+    /** Share of what's left after dated goals that goes to goals without a date; the rest stays as a buffer. */
+    const val UNDATED_SHARE = 0.5
+
+    /**
+     * Splits [available] (this cycle's spare money, normally the emergency pod's share) across unfinished goals.
+     * Goals with a date get what keeps them on schedule; if there isn't enough, everyone gets the same fraction of
+     * what they need. Half of anything left goes to goals without a date, in proportion to what each still needs.
+     */
+    fun plan(progress: List<GoalProgress>, available: Long): AutopilotPlan {
+        val open = progress.filter { !it.reached }
+        if (available <= 0 || open.isEmpty()) return AutopilotPlan(available.coerceAtLeast(0), open.map { GoalAllocation(it.goal, it.perCycle, 0) })
+        val dated = open.filter { it.perCycle != null }
+        val undated = open.filter { it.perCycle == null }
+        val need = dated.sumOf { it.perCycle!! }
+        val datedAlloc = if (need <= available) dated.associateWith { it.perCycle!! }
+        else dated.associateWith { it.perCycle!! * available / need }
+        val left = available - datedAlloc.values.sum()
+        val forUndated = (left * UNDATED_SHARE).toLong()
+        val undatedNeed = undated.sumOf { it.remaining }
+        val undatedAlloc = undated.associateWith { g ->
+            if (undatedNeed <= 0) 0L else minOf(g.remaining, forUndated * g.remaining / undatedNeed)
+        }
+        val allocations = open.map { g -> GoalAllocation(g.goal, g.perCycle, datedAlloc[g] ?: undatedAlloc[g] ?: 0) }
+        return AutopilotPlan(available, allocations)
+    }
+}

@@ -163,3 +163,35 @@ class SplitTest {
         org.junit.Assert.assertEquals(500L to emptyList<SplitShare>(), Split.equal(500, emptyList()))
     }
 }
+
+class GoalAutopilotTest {
+    private val today = java.time.LocalDate.of(2026, 10, 1)
+    private fun progress(name: String, target: Long, saved: Long, date: java.time.LocalDate?) =
+        Pods.goalProgress(Goal(name = name, target = target, targetDate = date, pod = "$name pod"), saved, today)
+
+    @org.junit.Test
+    fun enoughForDatedGoalsThenHalfTheRestToUndated() {
+        val trip = progress("Trip", 60_000, 0, java.time.LocalDate.of(2027, 3, 1)) // 6 cycles → 10,000
+        val bike = progress("Bike", 100_000, 20_000, null)
+        val tv = progress("TV", 40_000, 0, null)
+        val done = progress("Phone", 10_000, 10_000, null)
+        val plan = GoalAutopilot.plan(listOf(trip, bike, tv, done), 30_000)
+        org.junit.Assert.assertEquals(listOf("Trip", "Bike", "TV"), plan.allocations.map { it.goal.name })
+        org.junit.Assert.assertEquals(10_000, plan.allocations[0].suggested)
+        // 20,000 left, half = 10,000 split 80k:40k.
+        org.junit.Assert.assertEquals(6_666, plan.allocations[1].suggested)
+        org.junit.Assert.assertEquals(3_333, plan.allocations[2].suggested)
+        org.junit.Assert.assertEquals(0, plan.shortBy)
+        org.junit.Assert.assertEquals(30_000 - 19_999, plan.keep)
+    }
+
+    @org.junit.Test
+    fun notEnoughScalesDatedGoalsEvenly() {
+        val a = progress("A", 60_000, 0, java.time.LocalDate.of(2027, 3, 1)) // 10,000
+        val b = progress("B", 30_000, 0, java.time.LocalDate.of(2027, 3, 1)) // 5,000
+        val plan = GoalAutopilot.plan(listOf(a, b), 6_000)
+        org.junit.Assert.assertEquals(listOf(4_000L, 2_000L), plan.allocations.map { it.suggested })
+        org.junit.Assert.assertEquals(9_000, plan.shortBy)
+        org.junit.Assert.assertEquals(0L, GoalAutopilot.plan(listOf(a), -500).total)
+    }
+}
