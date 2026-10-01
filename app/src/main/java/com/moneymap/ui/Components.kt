@@ -26,6 +26,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.moneymap.core.long
 import java.time.Instant
@@ -133,6 +134,38 @@ fun DateField(
             DatePicker(state = state)
         }
     }
+}
+
+@Composable
+fun PasswordField(value: String, onValueChange: (String) -> Unit, label: String, isError: Boolean = false) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        label = { Text(label) },
+        singleLine = true,
+        isError = isError,
+        visualTransformation = PasswordVisualTransformation(),
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+        modifier = Modifier.fillMaxWidth(),
+    )
+}
+
+/** Asks for the password of an encrypted backup being imported. */
+@Composable
+fun BackupPasswordDialog(wrong: Boolean, onSubmit: (String) -> Unit, onDismiss: () -> Unit) {
+    var password by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Backup password") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(if (wrong) "That password didn't work. Try again." else "This backup is password-protected.")
+                PasswordField(password, { password = it }, "Password", isError = wrong)
+            }
+        },
+        confirmButton = { TextButton(enabled = password.isNotEmpty(), onClick = { onSubmit(password) }) { Text("Restore") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
 }
 
 @Composable

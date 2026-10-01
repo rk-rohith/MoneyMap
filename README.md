@@ -23,7 +23,7 @@ CI (`.github/workflows/build-apk.yml`) runs tests, builds, lints and uploads the
 - **Quick add**: long-press the app icon for "Log expense" or "Lend / borrow"; the Sunday summary has a Log expense button.
 - **Share reminders**: the share icon on a person (or an entry) sends a friendly WhatsApp/SMS reminder.
 - **Search** (magnifier in the top bar): expenses, people and pod movements by name, note, category or amount.
-- **Settings (⋮ → Settings & plan)**: planned one-offs saved over several cycles, a 12-month emergency-fund comparison before saving, wallpaper colours (Android 12+), reminder times and switches, app lock (fingerprint/face/screen lock), edit salary, spending budget, every regular item (amount, day, type, start/end) and the loan repayments; changes apply from a chosen cycle onward. Weekly automatic backup to a folder, export/import, test notification.
+- **Settings (⋮ → Settings & plan)**: planned one-offs saved over several cycles, a 12-month emergency-fund comparison before saving, wallpaper colours (Android 12+), reminder times and switches, app lock (fingerprint/face/screen lock), edit salary, spending budget, every regular item (amount, day, type, start/end) and the loan repayments; changes apply from a chosen cycle onward. Weekly automatic backup to a folder, export/import, optional backup password (AES-GCM encrypted `.mmbackup` files), test notification.
 
 ## Previewing changes
 

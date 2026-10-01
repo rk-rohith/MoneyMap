@@ -67,7 +67,7 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-data class BackupState(val folderLabel: String?, val lastBackupAt: Long)
+data class BackupState(val folderLabel: String?, val lastBackupAt: Long, val passwordSet: Boolean = false)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -90,6 +90,7 @@ fun SettingsScreen(
     onLockChange: (Boolean) -> Unit = {},
     dynamicColor: Boolean = false,
     onDynamicColorChange: (Boolean) -> Unit = {},
+    onBackupPassword: (String?) -> Unit = {},
 ) {
     Scaffold(
         topBar = {
@@ -160,6 +161,8 @@ fun SettingsScreen(
                 }
             }
 
+            BackupPasswordCard(backup.passwordSet, onBackupPassword)
+
             if (dynamicColorSupported) {
                 OutlinedCard(Modifier.fillMaxWidth()) {
                     Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -182,6 +185,45 @@ fun SettingsScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun BackupPasswordCard(passwordSet: Boolean, onSave: (String?) -> Unit) {
+    var editing by remember { mutableStateOf(false) }
+    OutlinedCard(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Backup password", style = MaterialTheme.typography.titleMedium)
+            Text(
+                if (passwordSet) "On. Exports and weekly backups are encrypted (.mmbackup) and CSVs are left out. " +
+                    "Remember it: you need it to restore on a new phone."
+                else "Off. Backups are readable JSON. Set a password to encrypt them.",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilledTonalButton(onClick = { editing = true }) { Text(if (passwordSet) "Change" else "Set password") }
+                if (passwordSet) OutlinedButton(onClick = { onSave(null) }) { Text("Remove") }
+            }
+        }
+    }
+    if (editing) {
+        var first by remember { mutableStateOf("") }
+        var second by remember { mutableStateOf("") }
+        val valid = first.length >= 6 && first == second
+        AlertDialog(
+            onDismissRequest = { editing = false },
+            title = { Text("Backup password") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    PasswordField(first, { first = it }, "Password (at least 6 characters)")
+                    PasswordField(second, { second = it }, "Repeat password", isError = second.isNotEmpty() && second != first)
+                }
+            },
+            confirmButton = {
+                TextButton(enabled = valid, onClick = { onSave(first); editing = false }) { Text("Save") }
+            },
+            dismissButton = { TextButton(onClick = { editing = false }) { Text("Cancel") } },
+        )
     }
 }
 

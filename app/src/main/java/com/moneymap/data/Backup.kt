@@ -3,6 +3,7 @@ package com.moneymap.data
 import android.content.Context
 import android.net.Uri
 import androidx.core.content.FileProvider
+import com.moneymap.core.BackupCrypto
 import com.moneymap.core.Direction
 import com.moneymap.core.EntryWithTxns
 import com.moneymap.core.ExpenseCategory
@@ -150,31 +151,67 @@ object Backup {
         expenses.forEach { appendLine(csv(it.id, it.date, it.amount, it.category.label, it.note)) }
     }
 
-    fun fileName(now: java.time.LocalDateTime = java.time.LocalDateTime.now()): String =
-        "moneymap-backup-${now.format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd-HHmm"))}.json"
+    /** Encrypted backups use their own extension so they aren't mistaken for readable JSON. */
+    const val ENCRYPTED_EXTENSION = "mmbackup"
 
-    /** Writes the export files to cache and returns shareable content URIs. */
+    fun fileName(now: java.time.LocalDateTime = java.time.LocalDateTime.now(), encrypted: Boolean = false): String =
+        "moneymap-backup-${now.format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd-HHmm"))}." +
+            if (encrypted) ENCRYPTED_EXTENSION else "json"
+
+    /** The full backup as file text: encrypted when a backup password is set. */
+    suspend fun backupText(context: Context, repo: MoneyRepository): String {
+        val json = toJson(repo.snapshot())
+        if (!BackupPassword.isSet(context)) return json
+        val password = BackupPassword.get(context) ?: error("Backup password is unreadable; set it again in Settings")
+        return BackupCrypto.encrypt(json, password.toCharArray())
+    }
+
+    /**
+     * Writes the export files to cache and returns shareable content URIs. With a backup password the readable
+     * CSVs are left out, since they would undo the protection.
+     */
     suspend fun export(context: Context, repo: MoneyRepository): List<Uri> = withContext(Dispatchers.IO) {
         val dir = File(context.cacheDir, "exports").apply { mkdirs() }
         dir.listFiles()?.forEach { it.delete() }
         val stamp = LocalDate.now().toString()
-        val data = repo.snapshot()
-        val entries = repo.entriesNow()
-        val expenses = data.expenses.map { it.toDomain() }
-        val files = listOf(
-            File(dir, "moneymap-backup-$stamp.json").apply { writeText(toJson(data)) },
-            File(dir, "moneymap-ledger-$stamp.csv").apply { writeText(ledgerCsv(entries)) },
-            File(dir, "moneymap-expenses-$stamp.csv").apply { writeText(expensesCsv(expenses)) },
-        )
+        val encrypted = BackupPassword.isSet(context)
+        val files = if (encrypted) {
+            listOf(File(dir, "moneymap-backup-$stamp.$ENCRYPTED_EXTENSION").apply { writeText(backupText(context, repo)) })
+        } else {
+            val data = repo.snapshot()
+            val entries = repo.entriesNow()
+            val expenses = data.expenses.map { it.toDomain() }
+            listOf(
+                File(dir, "moneymap-backup-$stamp.json").apply { writeText(toJson(data)) },
+                File(dir, "moneymap-ledger-$stamp.csv").apply { writeText(ledgerCsv(entries)) },
+                File(dir, "moneymap-expenses-$stamp.csv").apply { writeText(expensesCsv(expenses)) },
+            )
+        }
         val authority = "${context.packageName}.files"
         files.map { FileProvider.getUriForFile(context, authority, it) }
     }
 
-    suspend fun importFrom(context: Context, repo: MoneyRepository, uri: Uri): BackupData = withContext(Dispatchers.IO) {
-        val text = context.contentResolver.openInputStream(uri)?.use { it.readBytes().toString(Charsets.UTF_8) }
-            ?: error("Could not read file")
-        val data = fromJson(text)
-        repo.replaceAll(data)
-        data
+    /** The file is encrypted and neither [password] nor the saved backup password opens it. */
+    class PasswordNeededException(val wrongPassword: Boolean) :
+        Exception(if (wrongPassword) "Wrong backup password" else "This backup is password-protected")
+
+    /** Turns backup file text into JSON, decrypting with [password] or the saved backup password. */
+    fun decode(context: Context, text: String, password: String?): String {
+        if (!BackupCrypto.isEncrypted(text)) return text
+        val candidate = password ?: BackupPassword.get(context) ?: throw PasswordNeededException(wrongPassword = false)
+        return try {
+            BackupCrypto.decrypt(text, candidate.toCharArray())
+        } catch (_: BackupCrypto.WrongPasswordException) {
+            throw PasswordNeededException(wrongPassword = password != null)
+        }
     }
+
+    suspend fun importFrom(context: Context, repo: MoneyRepository, uri: Uri, password: String? = null): BackupData =
+        withContext(Dispatchers.IO) {
+            val text = context.contentResolver.openInputStream(uri)?.use { it.readBytes().toString(Charsets.UTF_8) }
+                ?: error("Could not read file")
+            val data = fromJson(decode(context, text, password))
+            repo.replaceAll(data)
+            data
+        }
 }

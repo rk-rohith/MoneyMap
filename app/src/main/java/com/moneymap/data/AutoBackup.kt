@@ -58,11 +58,13 @@ object AutoBackup {
         val tree = folder(context) ?: error("Choose a backup folder first")
         val resolver = context.contentResolver
         val parent = DocumentsContract.buildDocumentUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree))
-        val name = Backup.fileName()
-        val doc = DocumentsContract.createDocument(resolver, parent, "application/json", name)
+        val encrypted = BackupPassword.isSet(context)
+        val name = Backup.fileName(encrypted = encrypted)
+        val mime = if (encrypted) "application/octet-stream" else "application/json"
+        val doc = DocumentsContract.createDocument(resolver, parent, mime, name)
             ?: error("Could not create a file in the backup folder")
-        val json = Backup.toJson(repo.snapshot())
-        resolver.openOutputStream(doc, "w")?.use { it.write(json.toByteArray()) }
+        val text = Backup.backupText(context, repo)
+        resolver.openOutputStream(doc, "w")?.use { it.write(text.toByteArray()) }
             ?: error("Could not write to the backup folder")
         prefs(context).edit().putLong(KEY_LAST, System.currentTimeMillis()).apply()
         name

@@ -20,6 +20,7 @@ import com.moneymap.core.formatInr
 import com.moneymap.data.AppLock
 import com.moneymap.data.AutoBackup
 import com.moneymap.data.Backup
+import com.moneymap.data.BackupPassword
 import com.moneymap.data.Expense
 import com.moneymap.data.UiPrefs
 import com.moneymap.notify.AlarmReceiver
@@ -35,6 +36,9 @@ import java.time.LocalDate
 
 /** Something the UI should open, e.g. from a notification tap. */
 data class OpenRequest(val entryId: Long?, val record: Boolean, val tab: Int?)
+
+/** Import of [uri] needs a password; [wrong] after a failed attempt. */
+data class PasswordPrompt(val uri: Uri, val wrong: Boolean)
 
 /** A snackbar message, optionally with an action such as Undo. */
 data class UiMessage(val text: String, val actionLabel: String? = null, val action: (() -> Unit)? = null)
@@ -113,7 +117,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun readBackupState(): BackupState {
         val ctx = getApplication<Application>()
-        return BackupState(AutoBackup.folder(ctx)?.let(AutoBackup::folderLabel), AutoBackup.lastBackupAt(ctx))
+        return BackupState(AutoBackup.folder(ctx)?.let(AutoBackup::folderLabel), AutoBackup.lastBackupAt(ctx),
+            passwordSet = BackupPassword.isSet(ctx))
     }
 
     fun refreshToday() {
@@ -214,10 +219,27 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             .onFailure { say("Export failed: ${it.message}") }
     }
 
-    fun importBackup(uri: Uri) = viewModelScope.launch {
-        runCatching { Backup.importFrom(getApplication(), repo, uri) }
+    /** A password-protected backup waiting for its password, or null. */
+    private val _passwordPrompt = MutableStateFlow<PasswordPrompt?>(null)
+    val passwordPrompt: StateFlow<PasswordPrompt?> = _passwordPrompt.asStateFlow()
+
+    fun importBackup(uri: Uri, password: String? = null) = viewModelScope.launch {
+        _passwordPrompt.value = null
+        runCatching { Backup.importFrom(getApplication(), repo, uri, password) }
             .onSuccess { say("Imported ${it.entries.size} entries and ${it.expenses.size} expenses") }
-            .onFailure { say("Import failed: ${it.message}") }
+            .onFailure {
+                if (it is Backup.PasswordNeededException) _passwordPrompt.value = PasswordPrompt(uri, it.wrongPassword)
+                else say("Import failed: ${it.message}")
+            }
+    }
+
+    fun dismissPasswordPrompt() { _passwordPrompt.value = null }
+
+    fun setBackupPassword(password: String?) {
+        runCatching { BackupPassword.set(getApplication(), password) }
+            .onSuccess { say(if (password.isNullOrBlank()) "Backup password removed" else "Backups will be password-protected") }
+            .onFailure { say("Could not save the password: ${it.message}") }
+        _backup.value = readBackupState()
     }
 
     fun setBackupFolder(uri: Uri) = viewModelScope.launch {

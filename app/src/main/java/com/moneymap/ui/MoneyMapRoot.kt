@@ -72,6 +72,7 @@ fun MoneyMapRoot(vm: MainViewModel, onLockChanged: (Boolean) -> Boolean = { true
     val addEntryRequest by vm.addEntry.collectAsStateWithLifecycle()
     val reminderPrefs by vm.reminderPrefs.collectAsStateWithLifecycle()
     val lockEnabled by vm.lockEnabled.collectAsStateWithLifecycle()
+    val passwordPrompt by vm.passwordPrompt.collectAsStateWithLifecycle()
 
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var detailId by rememberSaveable { mutableStateOf<Long?>(null) }
@@ -137,6 +138,14 @@ fun MoneyMapRoot(vm: MainViewModel, onLockChanged: (Boolean) -> Boolean = { true
 
     val openForm: (Long?) -> Unit = { id -> formEditId = id; formOpen = true }
 
+    passwordPrompt?.let { prompt ->
+        BackupPasswordDialog(
+            wrong = prompt.wrong,
+            onSubmit = { vm.importBackup(prompt.uri, it) },
+            onDismiss = { vm.dismissPasswordPrompt() },
+        )
+    }
+
     LaunchedEffect(addEntryRequest) {
         if (addEntryRequest) {
             settingsOpen = false
@@ -181,6 +190,7 @@ fun MoneyMapRoot(vm: MainViewModel, onLockChanged: (Boolean) -> Boolean = { true
             onLockChange = { enabled -> vm.lockChanged(enabled, onLockChanged(enabled)) },
             dynamicColor = dynamicColor,
             onDynamicColorChange = { vm.setDynamicColor(it) },
+            onBackupPassword = { vm.setBackupPassword(it) },
         )
         ImportConfirm(confirmImport, onDismiss = { confirmImport = false }) {
             importLauncher.launch(arrayOf("application/json", "text/plain", "application/octet-stream"))
@@ -241,7 +251,7 @@ fun MoneyMapRoot(vm: MainViewModel, onLockChanged: (Boolean) -> Boolean = { true
                         DropdownMenuItem(text = { Text("Settings & plan") }, onClick = {
                             menuOpen = false; settingsOpen = true
                         })
-                        DropdownMenuItem(text = { Text("Export backup (JSON + CSV)") }, onClick = {
+                        DropdownMenuItem(text = { Text("Export backup") }, onClick = {
                             menuOpen = false; vm.export()
                         })
                         DropdownMenuItem(text = { Text("Send test notification") }, onClick = {
