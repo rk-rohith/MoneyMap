@@ -247,9 +247,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (repo.undoLast(entryId)) say("Last transaction undone")
     }
 
-    fun addExpense(amount: Long, note: String, category: ExpenseCategory) = viewModelScope.launch {
-        val warning = budgetWarning(amount, category, today.value)
-        repo.addExpense(amount, note, today.value, category)
+    fun addExpense(amount: Long, note: String, category: ExpenseCategory, date: LocalDate? = null) = viewModelScope.launch {
+        val day = date ?: today.value
+        val warning = budgetWarning(amount, category, day)
+        repo.addExpense(amount, note, day, category)
         say("Logged ${formatInr(amount)} · ${category.label}" + (warning ?: ""))
     }
 

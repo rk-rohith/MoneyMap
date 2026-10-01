@@ -197,3 +197,38 @@ fun relativeDay(date: LocalDate, today: LocalDate): String {
         else -> "${-days} days ago"
     }
 }
+
+/**
+ * One line such as "250 lunch zomato": every change is parsed and handed to [onParsed] so the form fills itself.
+ * "Speak" uses the phone's speech recognizer to type the line.
+ */
+@Composable
+fun OneLineEntry(today: LocalDate, onParsed: (com.moneymap.core.ParsedEntry) -> Unit, modifier: Modifier = Modifier) {
+    var line by remember { mutableStateOf("") }
+    val speech = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val spoken = result.data?.getStringArrayListExtra(android.speech.RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
+        if (!spoken.isNullOrBlank()) {
+            line = spoken
+            onParsed(com.moneymap.core.QuickEntry.parse(spoken, today))
+        }
+    }
+    Row(modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+        OutlinedTextField(
+            value = line,
+            onValueChange = { line = it; onParsed(com.moneymap.core.QuickEntry.parse(it, today)) },
+            label = { Text("Quick: 250 lunch zomato") },
+            singleLine = true,
+            modifier = Modifier.weight(1f),
+        )
+        TextButton(onClick = {
+            val intent = android.content.Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL, android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                putExtra(android.speech.RecognizerIntent.EXTRA_PROMPT, "Say the amount and what it was for")
+            }
+            // Phones without a speech service: nothing happens, typing still works.
+            runCatching { speech.launch(intent) }
+        }) { Text("Speak") }
+    }
+}

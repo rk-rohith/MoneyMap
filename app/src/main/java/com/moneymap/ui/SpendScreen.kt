@@ -185,6 +185,11 @@ fun SpendScreen(
                 OutlinedCard {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("Log an expense", style = MaterialTheme.typography.titleMedium)
+                        OneLineEntry(today, onParsed = { p ->
+                            p.amount?.let { amount = formatInr(it, withSymbol = false) }
+                            note = p.note
+                            category = p.category
+                        })
                         AmountField(amount, { amount = it }, isError = showErrors && parsed == null)
                         OutlinedTextField(
                             value = note, onValueChange = { note = it }, label = { Text("Note") },

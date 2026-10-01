@@ -50,7 +50,14 @@ fun LockScreen(onUnlock: () -> Unit) {
 
 /** Small "log expense" form used by the launcher shortcut, widget and weekly notification. */
 @Composable
-fun QuickAddDialog(leftToSpend: Long, onDismiss: () -> Unit, onAdd: (Long, String, ExpenseCategory) -> Unit) {
+fun QuickAddDialog(
+    leftToSpend: Long,
+    onDismiss: () -> Unit,
+    onAdd: (Long, String, ExpenseCategory) -> Unit,
+    onAddDated: ((Long, String, ExpenseCategory, java.time.LocalDate) -> Unit)? = null,
+) {
+    val today = java.time.LocalDate.now()
+    var date by rememberSaveable { mutableStateOf(today) }
     var amount by rememberSaveable { mutableStateOf("") }
     var note by rememberSaveable { mutableStateOf("") }
     var category by rememberSaveable { mutableStateOf(ExpenseCategory.FOOD) }
@@ -61,6 +68,13 @@ fun QuickAddDialog(leftToSpend: Long, onDismiss: () -> Unit, onAdd: (Long, Strin
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("${formatInr(leftToSpend)} left this cycle", style = MaterialTheme.typography.bodyMedium)
+                OneLineEntry(today, onParsed = { p ->
+                    p.amount?.let { amount = formatInr(it, withSymbol = false) }
+                    note = p.note
+                    category = p.category
+                    date = p.date
+                })
+                if (date != today) Text("Date: yesterday", style = MaterialTheme.typography.bodySmall)
                 AmountField(amount, { amount = it })
                 OutlinedTextField(note, { note = it }, label = { Text("Note") }, singleLine = true,
                     modifier = Modifier.fillMaxWidth())
@@ -72,7 +86,9 @@ fun QuickAddDialog(leftToSpend: Long, onDismiss: () -> Unit, onAdd: (Long, Strin
             }
         },
         confirmButton = {
-            TextButton(enabled = parsed != null, onClick = { parsed?.let { onAdd(it, note, category) } }) { Text("Add") }
+            TextButton(enabled = parsed != null, onClick = {
+                parsed?.let { if (onAddDated != null) onAddDated(it, note, category, date) else onAdd(it, note, category) }
+            }) { Text("Add") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )

@@ -191,6 +191,10 @@ fun MoneyMapRoot(vm: MainViewModel, onLockChanged: (Boolean) -> Boolean = { true
                 vm.addExpense(amount, note, category)
                 vm.dismissQuickAdd()
             },
+            onAddDated = { amount, note, category, date ->
+                vm.addExpense(amount, note, category, date)
+                vm.dismissQuickAdd()
+            },
         )
     }
 
