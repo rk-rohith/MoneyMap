@@ -119,3 +119,21 @@ object Spending {
             .sortedByDescending { it.amount }
     }
 }
+
+/** One person's part of a shared bill. */
+data class SplitShare(val person: String, val amount: Long)
+
+object Split {
+    /**
+     * Splits [total] equally between me and [others]. Rupees that don't divide evenly go to me, so what the others
+     * owe is never rounded up. Returns my share and one [SplitShare] per other person (blank / duplicate names dropped).
+     */
+    fun equal(total: Long, others: List<String>): Pair<Long, List<SplitShare>> {
+        val people = others.map { it.trim() }.filter { it.isNotEmpty() }.distinctBy { it.lowercase() }
+        require(total > 0) { "Amount must be positive" }
+        if (people.isEmpty()) return total to emptyList()
+        val each = total / (people.size + 1)
+        val mine = total - each * people.size
+        return mine to people.map { SplitShare(it, each) }
+    }
+}

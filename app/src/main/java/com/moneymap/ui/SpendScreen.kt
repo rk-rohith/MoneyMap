@@ -77,6 +77,7 @@ fun SpendScreen(
     cameraUri: () -> Uri = { Uri.EMPTY },
     onAttachReceipt: (Long, Uri) -> Unit = { _, _ -> },
     onRemoveReceipt: (Long) -> Unit = {},
+    onSplit: (Long, String, ExpenseCategory, List<String>) -> Unit = { _, _, _, _ -> },
 ) {
     var openExpense by rememberSaveable { mutableStateOf<Long?>(null) }
     var offset by rememberSaveable { mutableLongStateOf(0L) }
@@ -96,6 +97,9 @@ fun SpendScreen(
     var category by rememberSaveable { mutableStateOf(ExpenseCategory.FOOD) }
     var forSomeone by rememberSaveable { mutableStateOf(false) }
     var person by rememberSaveable { mutableStateOf("") }
+    var split by rememberSaveable { mutableStateOf(false) }
+    var splitNames by rememberSaveable { mutableStateOf("") }
+    val splitList = splitNames.split(',').map { it.trim() }.filter { it.isNotEmpty() }
     var showErrors by rememberSaveable { mutableStateOf(false) }
     val parsed = parseAmount(amount)
 
@@ -198,23 +202,58 @@ fun SpendScreen(
                                 Text("Adds it to People as money they owe you, not as spending",
                                     style = MaterialTheme.typography.bodySmall)
                             }
-                            Switch(checked = forSomeone, onCheckedChange = { forSomeone = it })
+                            Switch(checked = forSomeone, onCheckedChange = { forSomeone = it; if (it) split = false })
                         }
                         if (forSomeone) {
                             PersonField(person, { person = it }, people, isError = showErrors && person.isBlank())
                         }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text("Split the bill")
+                                Text("You paid it all; your share is spending, the rest goes to People",
+                                    style = MaterialTheme.typography.bodySmall)
+                            }
+                            Switch(checked = split, onCheckedChange = { split = it; if (it) forSomeone = false })
+                        }
+                        if (split) {
+                            OutlinedTextField(
+                                value = splitNames, onValueChange = { splitNames = it },
+                                label = { Text("Split with (names, separated by commas)") },
+                                isError = showErrors && splitList.isEmpty(), modifier = Modifier.fillMaxWidth(),
+                            )
+                            val suggestions = people.filter { p -> splitList.none { it.equals(p, ignoreCase = true) } }.take(8)
+                            if (suggestions.isNotEmpty()) {
+                                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    suggestions.forEach { p ->
+                                        FilterChip(selected = false, onClick = {
+                                            splitNames = (splitList + p).joinToString(", ")
+                                        }, label = { Text(p) })
+                                    }
+                                }
+                            }
+                            if (parsed != null && splitList.isNotEmpty()) {
+                                val (mine, shares) = com.moneymap.core.Split.equal(parsed, splitList)
+                                Text("You ${formatInr(mine)} · each of ${shares.size} owes ${formatInr(shares.first().amount)}",
+                                    style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
                         Button(
                             onClick = {
                                 val a = parsed
-                                if (a == null || (forSomeone && person.isBlank())) {
+                                if (a == null || (forSomeone && person.isBlank()) || (split && splitList.isEmpty())) {
                                     showErrors = true
                                 } else {
-                                    if (forSomeone) onPaidForSomeone(person, a, note) else onAdd(a, note, category)
+                                    when {
+                                        forSomeone -> onPaidForSomeone(person, a, note)
+                                        split -> onSplit(a, note, category, splitList)
+                                        else -> onAdd(a, note, category)
+                                    }
                                     amount = ""; note = ""; person = ""; forSomeone = false; showErrors = false
+                                    split = false; splitNames = ""
                                 }
                             },
                             modifier = Modifier.fillMaxWidth(),
-                        ) { Text(if (forSomeone) "Add to People" else "Add expense") }
+                        ) { Text(if (forSomeone) "Add to People" else if (split) "Split and add" else "Add expense") }
                     }
                 }
             }

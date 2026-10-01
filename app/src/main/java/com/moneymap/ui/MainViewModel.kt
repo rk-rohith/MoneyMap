@@ -261,6 +261,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun clearSuggestions() = viewModelScope.launch { repo.clearSuggestions() }
 
+    /** Pays a shared bill: my share is spending, everyone else's share is money they owe me. */
+    fun splitBill(total: Long, note: String, category: ExpenseCategory, others: List<String>) = viewModelScope.launch {
+        val (mine, shares) = com.moneymap.core.Split.equal(total, others)
+        val warning = budgetWarning(mine, category, today.value)
+        repo.addExpense(mine, note, today.value, category)
+        val label = note.trim().ifBlank { category.label }
+        shares.forEach { repo.paidForSomeone(it.person, it.amount, "Split: $label", today.value) }
+        say("Your share ${formatInr(mine)} logged · ${shares.size} ${if (shares.size == 1) "person owes" else "people owe"} " +
+            "${formatInr(shares.firstOrNull()?.amount ?: 0)} each" + (warning ?: ""))
+    }
+
     fun paidForSomeone(person: String, amount: Long, note: String) = viewModelScope.launch {
         repo.paidForSomeone(person.trim(), amount, note, today.value)
         say("Added to People: ${person.trim()} owes you ${formatInr(amount)}")

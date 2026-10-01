@@ -152,3 +152,14 @@ class OneOffAndSearchTest {
         assertFalse(Search.matches("   ", listOf("Anything")))
     }
 }
+
+class SplitTest {
+    @org.junit.Test
+    fun equalSplitRemainderStaysWithMe() {
+        val (mine, shares) = Split.equal(1_000, listOf("Asha", " Ravi ", "asha", ""))
+        org.junit.Assert.assertEquals(334, mine)
+        org.junit.Assert.assertEquals(listOf(SplitShare("Asha", 333), SplitShare("Ravi", 333)), shares)
+        org.junit.Assert.assertEquals(1_000, mine + shares.sumOf { it.amount })
+        org.junit.Assert.assertEquals(500L to emptyList<SplitShare>(), Split.equal(500, emptyList()))
+    }
+}
