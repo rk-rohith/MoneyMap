@@ -44,6 +44,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.app.NotificationManagerCompat
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -169,6 +172,8 @@ fun SettingsScreen(
 
             BackupPasswordCard(backup.passwordSet, onBackupPassword)
 
+            NotificationAccessCard()
+
             if (dynamicColorSupported) {
                 OutlinedCard(Modifier.fillMaxWidth()) {
                     Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -230,6 +235,31 @@ private fun ProfileCard(profile: Profile, onSave: (Profile) -> Unit) {
                 label = { Text("Loan total (₹, blank for none)") }, singleLine = true, isError = loan == null,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth())
             Button(enabled = valid && edited != profile, onClick = { onSave(edited) }) { Text("Save") }
+        }
+    }
+}
+
+/** Lets the notification listener read bank / UPI alerts to suggest expenses. */
+@Composable
+private fun NotificationAccessCard() {
+    val context = LocalContext.current
+    var enabled by remember { mutableStateOf(false) }
+    LifecycleResumeEffect(Unit) {
+        enabled = NotificationManagerCompat.getEnabledListenerPackages(context).contains(context.packageName)
+        onPauseOrDispose { }
+    }
+    OutlinedCard(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Expenses from notifications", style = MaterialTheme.typography.titleMedium)
+            Text(
+                if (enabled) "On. Payments from bank and UPI notifications show up on Spend for you to add or ignore."
+                else "Off. Allow notification access and Money map suggests expenses from bank, card and UPI " +
+                    "notifications. They stay on this phone and nothing is added without your tap.",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            OutlinedButton(onClick = {
+                context.startActivity(android.content.Intent(android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+            }) { Text(if (enabled) "Turn off in Android settings" else "Allow notification access") }
         }
     }
 }

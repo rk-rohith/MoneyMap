@@ -23,6 +23,8 @@ CI (`.github/workflows/build-apk.yml`) runs tests, builds, lints and uploads the
 - **Uneven income**: a different salary for a single cycle, dated extra income (bonus, refund) that tops up that
   cycle's emergency pod, and an option to move salary day to the Friday before when it falls on a weekend.
 - **Month**: overdue alerts, next-up card, cycle navigation, salary split, payment checklist with undo.
+- **Expenses from notifications** (optional, Settings): with notification access, debits from bank, card and UPI
+  notifications appear on Spend as suggestions to add or ignore (duplicates from bank + UPI app are merged).
 - **Spend**: log expenses by category, see where the budget went, browse past cycles, "paid for someone" → People.
 - **People**: money lent and borrowed, partial returns, reminders on due dates.
 - **Save**: pod balances (filled by ticking the salary-day routine, emptied by debt/pod-move ticks, topped up by returns) and goals with "save ₹X per cycle".

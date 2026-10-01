@@ -17,6 +17,7 @@ import com.moneymap.core.PodMove
 import com.moneymap.core.Profile
 import com.moneymap.core.ReminderPrefs
 import com.moneymap.core.ReturnPod
+import com.moneymap.core.SuggestedExpense
 import com.moneymap.core.formatInr
 import com.moneymap.data.AppLock
 import com.moneymap.data.AutoBackup
@@ -62,6 +63,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** Null while loading; [Profile.setupDone] false shows the first-run setup. */
     val profile: StateFlow<Profile?> =
         repo.profile.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+    val suggestions: StateFlow<List<SuggestedExpense>> =
+        repo.suggestions.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
     val reminderPrefs: StateFlow<ReminderPrefs> =
         repo.reminderPrefs.stateIn(viewModelScope, SharingStarted.Eagerly, ReminderPrefs())
 
@@ -190,6 +193,18 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         repo.addExpense(amount, note, today.value, category)
         say("Logged ${formatInr(amount)} · ${category.label}")
     }
+
+    fun acceptSuggestion(s: SuggestedExpense, note: String, category: ExpenseCategory) = viewModelScope.launch {
+        repo.acceptSuggestion(s, note, category)
+        say("Logged ${formatInr(s.amount)} · ${category.label}")
+    }
+
+    fun dismissSuggestion(s: SuggestedExpense) = viewModelScope.launch {
+        repo.dismissSuggestion(s.id)
+        say("Dismissed ${formatInr(s.amount)}", "Undo") { viewModelScope.launch { repo.addSuggestion(s) } }
+    }
+
+    fun clearSuggestions() = viewModelScope.launch { repo.clearSuggestions() }
 
     fun paidForSomeone(person: String, amount: Long, note: String) = viewModelScope.launch {
         repo.paidForSomeone(person.trim(), amount, note, today.value)

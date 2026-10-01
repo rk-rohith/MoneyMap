@@ -17,6 +17,10 @@ import com.moneymap.core.ReminderPrefs
 import com.moneymap.core.Pods
 import com.moneymap.core.ReturnPod
 import com.moneymap.core.Settlement
+import com.moneymap.core.SuggestedExpense
+import com.moneymap.core.TxnParser
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import java.time.LocalDate
@@ -43,6 +47,28 @@ class MoneyRepository(
     /** Null until [init] has stored one; the UI waits for it. Every emission also updates [Plan.profile]. */
     val profile: Flow<Profile?> = dao.observeSetting(ProfileJson.SETTING_KEY).map { text ->
         ProfileJson.decode(text)?.also { Plan.profile = it }
+    }
+
+    val suggestions: Flow<List<SuggestedExpense>> =
+        dao.observeSetting(SuggestionsJson.SETTING_KEY).map { SuggestionsJson.decode(it) }
+    private val suggestionLock = Mutex()
+
+    private suspend fun updateSuggestions(change: (List<SuggestedExpense>) -> List<SuggestedExpense>) =
+        suggestionLock.withLock {
+            val now = SuggestionsJson.decode(dao.setting(SuggestionsJson.SETTING_KEY))
+            dao.putSetting(SettingEntity(SuggestionsJson.SETTING_KEY, SuggestionsJson.encode(change(now))))
+        }
+
+    suspend fun addSuggestion(s: SuggestedExpense) = updateSuggestions { TxnParser.merge(it, s) }
+
+    suspend fun dismissSuggestion(id: String) = updateSuggestions { list -> list.filter { it.id != id } }
+
+    suspend fun clearSuggestions() = updateSuggestions { emptyList() }
+
+    /** Logs a suggestion as an expense on the day it happened. */
+    suspend fun acceptSuggestion(s: SuggestedExpense, note: String, category: ExpenseCategory) {
+        addExpense(s.amount, note, s.at.toLocalDate(), category)
+        dismissSuggestion(s.id)
     }
 
     private fun decodePlan(text: String?): PlanSettings =

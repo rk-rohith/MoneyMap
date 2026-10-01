@@ -47,6 +47,7 @@ import com.moneymap.core.ExpenseCategory
 import com.moneymap.core.Plan
 import com.moneymap.core.PlanEngine
 import com.moneymap.core.Spending
+import com.moneymap.core.SuggestedExpense
 import com.moneymap.core.formatInr
 import com.moneymap.core.parseAmount
 import com.moneymap.core.short
@@ -65,6 +66,9 @@ fun SpendScreen(
     onPaidForSomeone: (String, Long, String) -> Unit,
     onDelete: (Expense) -> Unit,
     modifier: Modifier = Modifier,
+    suggestions: List<SuggestedExpense> = emptyList(),
+    onAcceptSuggestion: (SuggestedExpense, String, ExpenseCategory) -> Unit = { _, _, _ -> },
+    onDismissSuggestion: (SuggestedExpense) -> Unit = {},
 ) {
     var offset by rememberSaveable { mutableLongStateOf(0L) }
     val current = offset == 0L
@@ -113,7 +117,7 @@ fun SpendScreen(
                 containerColor = if (left < 0) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.primaryContainer,
             )) {
                 Column(Modifier.padding(20.dp).fillMaxWidth()) {
-                    Text(if (current) "LEFT TO SPEND · JUPITER MAIN" else "LEFT AT END OF CYCLE",
+                    Text(if (current) "LEFT TO SPEND · ${Plan.SPEND_MAIN.uppercase()}" else "LEFT AT END OF CYCLE",
                         style = MaterialTheme.typography.labelMedium)
                     Text(formatInr(left), style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold)
                     Text("Spent ${formatInr(spent)} of ${formatInr(budget)}", style = MaterialTheme.typography.bodyMedium)
@@ -131,6 +135,9 @@ fun SpendScreen(
                     }
                 }
             }
+        }
+        if (current && suggestions.isNotEmpty()) {
+            item { SuggestionsCard(suggestions, onAcceptSuggestion, onDismissSuggestion) }
         }
         if (breakdown.isNotEmpty()) {
             item {
