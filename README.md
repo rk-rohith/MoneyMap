@@ -36,7 +36,8 @@ CI (`.github/workflows/build-apk.yml`) runs tests, builds, lints and uploads the
 - **Save**: pod balances (filled by ticking the salary-day routine, emptied by debt/pod-move ticks, topped up by returns) and goals with "save ₹X per cycle".
 - **Home-screen widgets**: a summary widget (next payment, what's left to spend, what others owe, + Expense) and a
   Pods widget with savings pod balances.
-- **Quick add**: long-press the app icon for "Log expense" or "Lend / borrow"; the Sunday summary has a Log expense button.
+- **Quick add**: long-press the app icon for "Log expense" or "Lend / borrow", or add the "Log expense" Quick Settings
+  tile to the notification shade; the Sunday summary has a Log expense button.
 - **Share reminders**: the share icon on a person (or an entry) sends a friendly WhatsApp/SMS reminder.
 - **Search** (magnifier in the top bar): expenses, people and pod movements by name, note, category or amount,
   with filters for period (this/last cycle, 90 days, this year), amount range and category; filters alone list
