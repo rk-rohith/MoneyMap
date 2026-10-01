@@ -26,6 +26,9 @@ CI (`.github/workflows/build-apk.yml`) runs tests, builds, lints and uploads the
 - **Expenses from notifications** (optional, Settings): with notification access, debits from bank, card and UPI
   notifications appear on Spend as suggestions to add or ignore (duplicates from bank + UPI app are merged).
 - **Spend**: log expenses by category, see where the budget went, browse past cycles, "paid for someone" → People.
+- **Reports & budgets** (⋮ menu): spending per cycle against budget for the last six cycles, each category against
+  its earlier average, monthly budgets per category (heads-up at 80% and when over), and payments that look like
+  they repeat every month with "Add to plan".
 - **People**: money lent and borrowed, partial returns, reminders on due dates.
 - **Save**: pod balances (filled by ticking the salary-day routine, emptied by debt/pod-move ticks, topped up by returns) and goals with "save ₹X per cycle".
 - **Home-screen widget**: next payment, what's left to spend, what others owe, and a + Expense button.

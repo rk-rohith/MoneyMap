@@ -49,6 +49,25 @@ class MoneyRepository(
         ProfileJson.decode(text)?.also { Plan.profile = it }
     }
 
+    val categoryBudgets: Flow<Map<ExpenseCategory, Long>> =
+        dao.observeSetting(CategoryBudgetsJson.SETTING_KEY).map { CategoryBudgetsJson.decode(it) }
+
+    suspend fun categoryBudgetsNow(): Map<ExpenseCategory, Long> =
+        CategoryBudgetsJson.decode(dao.setting(CategoryBudgetsJson.SETTING_KEY))
+
+    suspend fun saveCategoryBudgets(budgets: Map<ExpenseCategory, Long>) {
+        dao.putSetting(SettingEntity(CategoryBudgetsJson.SETTING_KEY, CategoryBudgetsJson.encode(budgets)))
+    }
+
+    /** Spent so far in [category] in the cycle containing [date]. */
+    suspend fun spentInCategory(category: ExpenseCategory, date: LocalDate): Long {
+        val start = Plan.cycleStartFor(date)
+        val end = Plan.cycleEnd(start)
+        return dao.expenses().filter {
+            it.category == category.name && it.dateEpochDay in start.toEpochDay()..end.toEpochDay()
+        }.sumOf { it.amount }
+    }
+
     val suggestions: Flow<List<SuggestedExpense>> =
         dao.observeSetting(SuggestionsJson.SETTING_KEY).map { SuggestionsJson.decode(it) }
     private val suggestionLock = Mutex()
@@ -265,6 +284,7 @@ class MoneyRepository(
         plan = dao.setting(PlanJson.SETTING_KEY),
         reminders = dao.setting(ReminderPrefsJson.SETTING_KEY),
         profile = dao.setting(ProfileJson.SETTING_KEY),
+        categoryBudgets = dao.setting(CategoryBudgetsJson.SETTING_KEY),
     )
 
     suspend fun replaceAll(data: BackupData) {
@@ -288,6 +308,7 @@ class MoneyRepository(
             val profile = data.profile?.let(ProfileJson::decode)?.copy(setupDone = true) ?: Profile()
             dao.putSetting(SettingEntity(ProfileJson.SETTING_KEY, ProfileJson.encode(profile)))
             Plan.profile = profile
+            data.categoryBudgets?.let { dao.putSetting(SettingEntity(CategoryBudgetsJson.SETTING_KEY, it)) }
         }
         onChanged()
     }
@@ -306,4 +327,6 @@ data class BackupData(
     val reminders: String? = null,
     /** Profile JSON; null for backups made before profiles existed. */
     val profile: String? = null,
+    /** Category budgets JSON, or null to keep the current ones. */
+    val categoryBudgets: String? = null,
 )

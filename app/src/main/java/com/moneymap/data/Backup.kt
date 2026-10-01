@@ -79,6 +79,7 @@ object Backup {
         data.plan?.let { root.put("plan", JSONObject(it)) }
         data.reminders?.let { root.put("reminders", JSONObject(it)) }
         data.profile?.let { root.put("profile", JSONObject(it)) }
+        data.categoryBudgets?.let { root.put("categoryBudgets", JSONObject(it)) }
         return root.toString(2)
     }
 
@@ -126,7 +127,10 @@ object Backup {
         val plan = root.optJSONObject("plan")?.let { PlanJson.encode(PlanJson.fromJson(it)) }
         val reminders = root.optJSONObject("reminders")?.let { ReminderPrefsJson.encode(ReminderPrefsJson.decode(it.toString())) }
         val profile = root.optJSONObject("profile")?.let { ProfileJson.decode(it.toString())?.let(ProfileJson::encode) }
-        return BackupData(entries, txns, expenses, done, podMoves, goals, plan, reminders, profile)
+        val categoryBudgets = root.optJSONObject("categoryBudgets")?.let {
+            CategoryBudgetsJson.encode(CategoryBudgetsJson.decode(it.toString()))
+        }
+        return BackupData(entries, txns, expenses, done, podMoves, goals, plan, reminders, profile, categoryBudgets)
     }
 
     private fun JSONArray.objects(): List<JSONObject> = (0 until length()).map { getJSONObject(it) }

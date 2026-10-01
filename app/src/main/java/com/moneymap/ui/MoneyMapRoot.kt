@@ -67,6 +67,8 @@ fun MoneyMapRoot(vm: MainViewModel, onLockChanged: (Boolean) -> Boolean = { true
     val backup by vm.backup.collectAsStateWithLifecycle()
     var settingsOpen by rememberSaveable { mutableStateOf(false) }
     var searchOpen by rememberSaveable { mutableStateOf(false) }
+    var reportsOpen by rememberSaveable { mutableStateOf(false) }
+    val categoryBudgets by vm.categoryBudgets.collectAsStateWithLifecycle()
     val dynamicColor by vm.dynamicColor.collectAsStateWithLifecycle()
     val quickAdd by vm.quickAdd.collectAsStateWithLifecycle()
     val addEntryRequest by vm.addEntry.collectAsStateWithLifecycle()
@@ -214,6 +216,17 @@ fun MoneyMapRoot(vm: MainViewModel, onLockChanged: (Boolean) -> Boolean = { true
         return
     }
 
+    if (reportsOpen) {
+        BackHandler { reportsOpen = false }
+        ReportsScreen(
+            today = today, plan = plan, expenses = expenses, budgets = categoryBudgets, snackbar = snackbar,
+            onBack = { reportsOpen = false },
+            onSaveBudgets = { vm.saveCategoryBudgets(it) },
+            onAddRegular = { vm.addRegularItem(it) },
+        )
+        return
+    }
+
     if (searchOpen && !formOpen && detailId == null) {
         BackHandler { searchOpen = false }
         SearchScreen(
@@ -266,6 +279,9 @@ fun MoneyMapRoot(vm: MainViewModel, onLockChanged: (Boolean) -> Boolean = { true
                     DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                         DropdownMenuItem(text = { Text("Settings & plan") }, onClick = {
                             menuOpen = false; settingsOpen = true
+                        })
+                        DropdownMenuItem(text = { Text("Reports & budgets") }, onClick = {
+                            menuOpen = false; reportsOpen = true
                         })
                         DropdownMenuItem(text = { Text("Export backup") }, onClick = {
                             menuOpen = false; vm.export()

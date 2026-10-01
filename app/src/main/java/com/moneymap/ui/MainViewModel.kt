@@ -63,6 +63,38 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** Null while loading; [Profile.setupDone] false shows the first-run setup. */
     val profile: StateFlow<Profile?> =
         repo.profile.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+    val categoryBudgets: StateFlow<Map<ExpenseCategory, Long>> =
+        repo.categoryBudgets.stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
+
+    fun saveCategoryBudgets(budgets: Map<ExpenseCategory, Long>) = viewModelScope.launch {
+        repo.saveCategoryBudgets(budgets)
+        say("Category budgets saved")
+    }
+
+    /** Snackbar text when this expense pushes its category past 80% or 100% of its budget. */
+    private suspend fun budgetWarning(amount: Long, category: ExpenseCategory, date: LocalDate): String? {
+        val budget = repo.categoryBudgetsNow()[category] ?: return null
+        val before = repo.spentInCategory(category, date)
+        return when (com.moneymap.core.Reports.budgetAlert(before, amount, budget)) {
+            100 -> " · ${category.label} is over its ${formatInr(budget)} budget"
+            80 -> " · 80% of the ${category.label} budget used"
+            else -> null
+        }
+    }
+
+    /** Adds a repeating payment spotted in Reports to the plan from the current cycle onward. */
+    fun addRegularItem(guess: com.moneymap.core.RecurringGuess) = viewModelScope.launch {
+        val engine = repo.planNow()
+        val cycle = com.moneymap.core.Plan.cycleStartFor(today.value)
+        val cfg = engine.settings.baseConfigFor(cycle)
+        val item = com.moneymap.core.RecurringItem(
+            id = "r${System.currentTimeMillis()}", title = guess.title, amount = guess.typicalAmount, day = guess.day,
+            flow = com.moneymap.core.Flow.HDFC, account = com.moneymap.core.Plan.HDFC,
+        )
+        repo.savePlan(engine.settings.withVersion(cycle, cfg.copy(items = cfg.items + item)))
+        say("Added ${guess.title} to your plan from ${com.moneymap.core.Plan.cycleLabel(cycle)}")
+    }
+
     val suggestions: StateFlow<List<SuggestedExpense>> =
         repo.suggestions.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
     val reminderPrefs: StateFlow<ReminderPrefs> =
@@ -190,13 +222,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun addExpense(amount: Long, note: String, category: ExpenseCategory) = viewModelScope.launch {
+        val warning = budgetWarning(amount, category, today.value)
         repo.addExpense(amount, note, today.value, category)
-        say("Logged ${formatInr(amount)} · ${category.label}")
+        say("Logged ${formatInr(amount)} · ${category.label}" + (warning ?: ""))
     }
 
     fun acceptSuggestion(s: SuggestedExpense, note: String, category: ExpenseCategory) = viewModelScope.launch {
+        val warning = budgetWarning(s.amount, category, s.at.toLocalDate())
         repo.acceptSuggestion(s, note, category)
-        say("Logged ${formatInr(s.amount)} · ${category.label}")
+        say("Logged ${formatInr(s.amount)} · ${category.label}" + (warning ?: ""))
     }
 
     fun dismissSuggestion(s: SuggestedExpense) = viewModelScope.launch {
