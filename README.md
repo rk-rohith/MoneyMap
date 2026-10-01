@@ -35,6 +35,13 @@ artifact. Locally: `./gradlew testDebugUnitTest -Pscreenshots` → `app/build/sc
 Every build is signed with the committed `app/debug.keystore`, so a new APK installs over the old one and keeps your data.
 (The very first build before this key existed was signed differently: uninstall that one once, after exporting a backup.)
 
+### Release builds
+
+`./gradlew assembleRelease` builds a minified (R8) APK. To sign it with your own key, set `MONEYMAP_KEYSTORE`,
+`MONEYMAP_KEYSTORE_PASSWORD`, `MONEYMAP_KEY_ALIAS` and `MONEYMAP_KEY_PASSWORD`; in CI add the keystore as the
+base64 secret `MONEYMAP_KEYSTORE_BASE64` plus the three other secrets. Without them the release APK uses the debug key.
+Switching an installed app from the debug key to a release key needs one reinstall: export a backup first.
+
 ## Layout
 
 - `core/` – pure Kotlin, unit-tested: `Plan.kt` (plan engine + default plan), `Savings.kt` (pods, goals, categories), `Ledger.kt` / `LedgerService.kt` (people ledger), `SeedData.kt`, `Reminders.kt` (what to notify and when), `Money.kt` (₹ Indian formatting).

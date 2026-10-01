@@ -27,12 +27,25 @@ android {
             keyAlias = "androiddebugkey"
             keyPassword = "android"
         }
+        // Real release key, supplied by CI secrets or local env vars; never committed.
+        val releaseStore = System.getenv("MONEYMAP_KEYSTORE")
+        if (!releaseStore.isNullOrBlank() && file(releaseStore).exists()) {
+            create("release") {
+                storeFile = file(releaseStore)
+                storePassword = System.getenv("MONEYMAP_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("MONEYMAP_KEY_ALIAS")
+                keyPassword = System.getenv("MONEYMAP_KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            // Without a release key the APK is signed with the debug key so it still installs.
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
         }
     }
     compileOptions {

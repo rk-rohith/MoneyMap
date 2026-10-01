@@ -31,6 +31,26 @@ jobs:
       - name: Lint
         run: ./gradlew --no-daemon lintDebug
 
+      # Signed with the release key when the MONEYMAP_* secrets are set, otherwise with the debug key.
+      - name: Build release APK
+        env:
+          MONEYMAP_KEYSTORE_BASE64: ${{ secrets.MONEYMAP_KEYSTORE_BASE64 }}
+          MONEYMAP_KEYSTORE_PASSWORD: ${{ secrets.MONEYMAP_KEYSTORE_PASSWORD }}
+          MONEYMAP_KEY_ALIAS: ${{ secrets.MONEYMAP_KEY_ALIAS }}
+          MONEYMAP_KEY_PASSWORD: ${{ secrets.MONEYMAP_KEY_PASSWORD }}
+        run: |
+          if [ -n "$MONEYMAP_KEYSTORE_BASE64" ]; then
+            echo "$MONEYMAP_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+            export MONEYMAP_KEYSTORE="$RUNNER_TEMP/release.jks"
+          fi
+          ./gradlew --no-daemon assembleRelease
+
+      - name: Upload release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: moneymap-release-apk
+          path: app/build/outputs/apk/release/*.apk
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
