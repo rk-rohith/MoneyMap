@@ -38,8 +38,11 @@ Every build is signed with the committed `app/debug.keystore`, so a new APK inst
 ## Layout
 
 - `core/` – pure Kotlin, unit-tested: `Plan.kt` (plan engine + default plan), `Savings.kt` (pods, goals, categories), `Ledger.kt` / `LedgerService.kt` (people ledger), `SeedData.kt`, `Reminders.kt` (what to notify and when), `Money.kt` (₹ Indian formatting).
-- `data/` – Room database, repository, JSON/CSV backup.
-- `notify/` – AlarmManager scheduling, notification actions, boot/time-change rescheduling.
+- `data/` – Room database, repository, JSON/CSV backup. Schemas are exported to `app/schemas/`; when you bump the
+  database version, add the migration to `ALL_MIGRATIONS` and commit the new schema file. `MigrationTest` upgrades a
+  real v1 database and fails if a migration doesn't match the entities.
+- `notify/` – AlarmManager scheduling (only the next 14 days, at most 200 alarms, topped up by a daily refresh alarm),
+  notification actions, boot/time-change rescheduling.
 - `ui/` – Month, Spend, People, Save, Settings, entry detail, add/edit.
 
 ## Install on a phone

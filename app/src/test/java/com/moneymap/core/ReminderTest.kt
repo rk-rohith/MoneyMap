@@ -27,6 +27,29 @@ class ReminderTest {
     }
 
     @Test
+    fun alarmWindowKeepsOnlyTheNextTwoWeeks() = runTest {
+        val store = InMemoryLedgerStore()
+        LedgerService(store).seedIfEmpty()
+        val planned = ReminderPlanner.plan(now, emptySet(), store.allEntries())
+        val window = ReminderPlanner.alarmWindow(planned, now)
+        val end = now.plusDays(ReminderPlanner.ALARM_WINDOW_DAYS)
+        assertTrue(window.isNotEmpty())
+        assertTrue(window.size < planned.size)
+        assertTrue(window.all { it.at.isAfter(now) && !it.at.isAfter(end) })
+        assertEquals(planned.filter { !it.at.isAfter(end) }, window)
+    }
+
+    @Test
+    fun alarmWindowIsCapped() {
+        val many = (1..1_000).map {
+            Reminder("k$it", now.plusMinutes(it.toLong()), ReminderType.WEEKLY, Slot.WEEKLY)
+        }.shuffled()
+        val window = ReminderPlanner.alarmWindow(many, now)
+        assertEquals(ReminderPlanner.MAX_ALARMS, window.size)
+        assertEquals((1..ReminderPlanner.MAX_ALARMS).map { "k$it" }, window.map { it.key })
+    }
+
+    @Test
     fun doneItemsAreSkipped() {
         val r = ReminderPlanner.plan(now, setOf("2026-10-17:car-emi"), emptyList())
         assertTrue(r.none { it.itemId == "2026-10-17:car-emi" })

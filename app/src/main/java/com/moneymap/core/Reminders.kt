@@ -44,6 +44,11 @@ object ReminderPlanner {
     const val HORIZON_DAYS = 92L
     const val DUE_REPEAT_DAYS = 3L
 
+    /** Only this far ahead gets a real alarm; a daily refresh tops the window up. */
+    const val ALARM_WINDOW_DAYS = 14L
+    /** Android allows 500 alarms per app; stay well clear of it. */
+    const val MAX_ALARMS = 200
+
     fun plan(
         now: LocalDateTime,
         done: Set<String>,
@@ -111,6 +116,14 @@ object ReminderPlanner {
             sunday = sunday.plusWeeks(1)
         }
         return out.sortedBy { it.at }
+    }
+
+    /** The earliest reminders inside the alarm window, capped so we never hit the OS alarm limit. */
+    fun alarmWindow(reminders: List<Reminder>, now: LocalDateTime): List<Reminder> {
+        val end = now.plusDays(ALARM_WINDOW_DAYS)
+        return reminders.filter { it.at.isAfter(now) && !it.at.isAfter(end) }
+            .sortedBy { it.at }
+            .take(MAX_ALARMS)
     }
 
     fun paymentText(item: PlanItem, slot: Slot, summary: LedgerSummary?): NotificationText {

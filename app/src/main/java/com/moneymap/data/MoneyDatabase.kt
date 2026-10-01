@@ -167,13 +167,16 @@ val MIGRATION_1_2 = object : Migration(1, 2) {
     }
 }
 
+/** Every migration, oldest first. Add new ones here so the app and the migration test both pick them up. */
+val ALL_MIGRATIONS = arrayOf(MIGRATION_1_2)
+
 @Database(
     entities = [
         EntryEntity::class, TxnEntity::class, ExpenseEntity::class, DoneEntity::class,
         PodMoveEntity::class, GoalEntity::class, SettingEntity::class,
     ],
     version = 2,
-    exportSchema = false,
+    exportSchema = true,
 )
 abstract class MoneyDatabase : RoomDatabase() {
     abstract fun dao(): MoneyDao
@@ -181,7 +184,7 @@ abstract class MoneyDatabase : RoomDatabase() {
     companion object {
         fun create(context: Context): MoneyDatabase =
             Room.databaseBuilder(context, MoneyDatabase::class.java, "moneymap.db")
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(*ALL_MIGRATIONS)
                 .build()
     }
 }

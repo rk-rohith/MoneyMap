@@ -57,6 +57,8 @@ android {
 
 ksp {
     arg("room.generateKotlin", "true")
+    // Schema history for every database version; commit new files from app/schemas when the version changes.
+    arg("room.schemaLocation", "$projectDir/schemas")
 }
 
 dependencies {

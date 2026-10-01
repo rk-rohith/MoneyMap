@@ -42,6 +42,7 @@ class AlarmReceiver : BroadcastReceiver() {
         val reminder = intent.toReminder()
         when (intent.action) {
             ACTION_FIRE -> if (reminder != null) fire(context, repo, reminder)
+            ACTION_REFRESH -> AlarmScheduler.rescheduleAll(context, repo)
             ACTION_MARK_DONE -> {
                 val itemId = intent.getStringExtra(EXTRA_ITEM_ID) ?: return
                 repo.setDone(itemId, true)
@@ -115,6 +116,7 @@ class AlarmReceiver : BroadcastReceiver() {
         const val ACTION_FIRE = "com.moneymap.action.FIRE"
         const val ACTION_MARK_DONE = "com.moneymap.action.MARK_DONE"
         const val ACTION_SNOOZE = "com.moneymap.action.SNOOZE"
+        const val ACTION_REFRESH = "com.moneymap.action.REFRESH"
 
         private const val EXTRA_KEY = "key"
         private const val EXTRA_TYPE = "type"
