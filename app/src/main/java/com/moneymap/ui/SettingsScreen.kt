@@ -99,6 +99,7 @@ fun SettingsScreen(
     onBackupPassword: (String?) -> Unit = {},
     profile: Profile = Plan.profile,
     onSaveProfile: (Profile) -> Unit = {},
+    onSaveCardBills: (List<com.moneymap.core.CardBill>) -> Unit = {},
 ) {
     Scaffold(
         topBar = {
@@ -118,6 +119,8 @@ fun SettingsScreen(
             PlanEditor(today, plan, onSavePlan)
 
             ProfileCard(profile, onSaveProfile)
+
+            CardBillsCard(today, plan.settings.cardBills, onSaveCardBills)
 
             ReminderSettings(reminderPrefs, onSaveReminders)
 
@@ -200,6 +203,63 @@ fun SettingsScreen(
                 }
             }
         }
+    }
+}
+
+/** Credit card statements due: added automatically from statement notifications, or by hand. */
+@Composable
+private fun CardBillsCard(today: LocalDate, bills: List<com.moneymap.core.CardBill>, onSave: (List<com.moneymap.core.CardBill>) -> Unit) {
+    var adding by remember { mutableStateOf(false) }
+    val upcoming = bills.filter { !it.dueDate.isBefore(today.minusDays(7)) }
+    OutlinedCard(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Credit card bills", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+                TextButton(onClick = { adding = true }) {
+                    Icon(Icons.Filled.Add, contentDescription = null)
+                    Text("Add")
+                }
+            }
+            Text("Statements from card notifications are added here and show on Month with reminders (needs " +
+                "\"Expenses from notifications\" on). They're reminders only: the spends were already logged.",
+                style = MaterialTheme.typography.bodySmall)
+            upcoming.forEach { b ->
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("${b.card} · ${formatInr(b.amount)}", style = MaterialTheme.typography.bodyLarge)
+                        Text("Due ${b.dueDate.long()}" + (b.minimumDue?.let { " · min ${formatInr(it)}" } ?: ""),
+                            style = MaterialTheme.typography.bodySmall)
+                    }
+                    IconButton(onClick = { onSave(bills - b) }) { Icon(Icons.Filled.Delete, contentDescription = "Remove") }
+                }
+            }
+        }
+    }
+    if (adding) {
+        var card by remember { mutableStateOf("") }
+        var amount by remember { mutableStateOf("") }
+        var due by remember { mutableStateOf(today.plusDays(14)) }
+        val parsed = parseAmount(amount)
+        AlertDialog(
+            onDismissRequest = { adding = false },
+            title = { Text("Add card bill") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(card, { card = it }, label = { Text("Card (e.g. HDFC Regalia)") }, singleLine = true,
+                        modifier = Modifier.fillMaxWidth())
+                    AmountField(amount, { amount = it }, label = "Total due")
+                    DateField("Due", due, { if (it != null) due = it })
+                }
+            },
+            confirmButton = {
+                TextButton(enabled = parsed != null && card.isNotBlank(), onClick = {
+                    val bill = com.moneymap.core.CardBill("${card.trim().lowercase().replace(" ", "")}-$due", card.trim(), parsed!!, null, due)
+                    onSave(com.moneymap.core.CardBillParser.merge(bills, bill, today))
+                    adding = false
+                }) { Text("Add") }
+            },
+            dismissButton = { TextButton(onClick = { adding = false }) { Text("Cancel") } },
+        )
     }
 }
 

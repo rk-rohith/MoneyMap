@@ -26,6 +26,8 @@ CI (`.github/workflows/build-apk.yml`) runs tests, builds, lints and uploads the
 - **Month**: overdue alerts, next-up card, cycle navigation, salary split, payment checklist with undo.
 - **Expenses from notifications** (optional, Settings): with notification access, debits from bank, card and UPI
   notifications appear on Spend as suggestions to add or ignore (duplicates from bank + UPI app are merged).
+- **Card bills**: credit card statement notifications (total due, minimum, due date) become "Pay card bill" items
+  on Month with the usual reminders; manage or add them in Settings → Credit card bills.
 - **Spend**: log expenses by category, see where the budget went, browse past cycles, "paid for someone" → People, "split the bill" (your share is spending, everyone
   else's equal share becomes money they owe you).
 - **Reports & budgets** (⋮ menu): spending per cycle against budget for the last six cycles, each category against

@@ -152,6 +152,18 @@ class MoneyRepository(
         return p
     }
 
+    /** Adds or updates a card statement in the plan. Returns false when nothing changed (a repeat notification). */
+    suspend fun addCardBill(bill: com.moneymap.core.CardBill): Boolean {
+        val settings = planNow().settings
+        if (settings.cardBills.any { it == bill }) return false
+        savePlan(settings.copy(cardBills = com.moneymap.core.CardBillParser.merge(settings.cardBills, bill, LocalDate.now())))
+        return true
+    }
+
+    suspend fun saveCardBills(bills: List<com.moneymap.core.CardBill>) {
+        savePlan(planNow().settings.copy(cardBills = bills.sortedBy { it.dueDate }))
+    }
+
     suspend fun podMovesNow(): List<PodMove> = dao.podMoves().map { it.toDomain() }
     suspend fun goalsNow(): List<Goal> = dao.goals().map { it.toDomain() }
 

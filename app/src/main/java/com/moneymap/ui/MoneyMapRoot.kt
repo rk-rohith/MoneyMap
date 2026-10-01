@@ -227,6 +227,7 @@ fun MoneyMapRoot(vm: MainViewModel, onLockChanged: (Boolean) -> Boolean = { true
             onBackupPassword = { vm.setBackupPassword(it) },
             profile = currentProfile,
             onSaveProfile = { vm.saveProfile(it) },
+            onSaveCardBills = { vm.saveCardBills(it) },
         )
         ImportConfirm(confirmImport, onDismiss = { confirmImport = false }) {
             importLauncher.launch(arrayOf("application/json", "text/plain", "application/octet-stream"))

@@ -182,6 +182,8 @@ data class PlanSettings(
     val extraIncome: List<ExtraIncome> = emptyList(),
     /** Salary for single cycles that differ from the plan (keyed by cycle start), e.g. a bonus month or unpaid leave. */
     val salaryOverrides: Map<LocalDate, Long> = emptyMap(),
+    /** Credit card statements to pay. Reminders only: the spending was already counted when it was logged. */
+    val cardBills: List<CardBill> = emptyList(),
 ) {
     init {
         require(versions.isNotEmpty()) { "A plan needs at least one version" }
@@ -401,6 +403,11 @@ class PlanEngine(val settings: PlanSettings) {
         }
 
         val end = Plan.cycleEnd(cycleStart)
+        settings.cardBills.filter { !it.dueDate.isBefore(cycleStart) && !it.dueDate.isAfter(end) }.forEach { c ->
+            out += PlanItem(id(c.dueDate, "card-${c.id}"), c.dueDate, "Pay ${c.card} bill", c.amount, Plan.HDFC, ItemKind.BILL,
+                detail = "Credit card statement" + (c.minimumDue?.let { " · minimum ${formatInr(it)}" } ?: ""))
+        }
+
         settings.oneOffs.filter { !it.date.isBefore(cycleStart) && !it.date.isAfter(end) && it.amount > 0 }.forEach { o ->
             out += PlanItem(id(o.date, "move-oneoff-${o.id}"), o.date, "Move ${o.pod} money to ${Plan.SPEND_MAIN}", o.amount,
                 Plan.JUPITER, ItemKind.TRANSFER, detail = "${o.pod} → ${Plan.SPEND_MAIN} before paying", pod = o.pod)

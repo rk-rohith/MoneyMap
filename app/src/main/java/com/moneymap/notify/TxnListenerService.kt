@@ -5,6 +5,9 @@ import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import com.moneymap.MoneyMapApp
 import com.moneymap.core.TxnParser
+import com.moneymap.core.CardBillParser
+import com.moneymap.core.formatInr
+import com.moneymap.core.long
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDateTime
@@ -23,8 +26,23 @@ class TxnListenerService : NotificationListenerService() {
         val text = (extras.getCharSequence(Notification.EXTRA_BIG_TEXT) ?: extras.getCharSequence(Notification.EXTRA_TEXT))
             ?.toString() ?: return
         val at = LocalDateTime.ofInstant(Instant.ofEpochMilli(sbn.postTime), ZoneId.systemDefault())
-        val suggestion = TxnParser.parse(title, text, at, sbn.packageName) ?: return
         val app = application as MoneyMapApp
+        // Card statements become "Pay card bill" items on Month, with reminders before the due date.
+        CardBillParser.parse(title, text, at.toLocalDate())?.let { bill ->
+            app.appScope.launch {
+                runCatching {
+                    if (app.repository.addCardBill(bill)) {
+                        val id = "card:${bill.id}".hashCode()
+                        Notifications.show(app, id, Notifications.CHANNEL_PAYMENTS,
+                            "Card bill added: ${bill.card}",
+                            "${formatInr(bill.amount)} due ${bill.dueDate.long()}. You'll get reminders before it's due.",
+                            Notifications.openAppIntent(app, id) { putExtra(com.moneymap.MainActivity.EXTRA_TAB, 0) })
+                    }
+                }
+            }
+            return
+        }
+        val suggestion = TxnParser.parse(title, text, at, sbn.packageName) ?: return
         app.appScope.launch { runCatching { app.repository.addSuggestion(suggestion) } }
     }
 }

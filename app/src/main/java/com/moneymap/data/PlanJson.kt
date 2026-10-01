@@ -1,6 +1,7 @@
 package com.moneymap.data
 
 import com.moneymap.core.DebtInstalment
+import com.moneymap.core.CardBill
 import com.moneymap.core.ExtraIncome
 import com.moneymap.core.Flow
 import com.moneymap.core.OneOff
@@ -44,6 +45,14 @@ object PlanJson {
             s.extraIncome.sortedBy { it.date }.forEach { x ->
                 put(JSONObject().apply {
                     put("id", x.id); put("title", x.title); put("amount", x.amount); put("date", x.date.toString())
+                })
+            }
+        })
+        put("cardBills", JSONArray().apply {
+            s.cardBills.sortedBy { it.dueDate }.forEach { c ->
+                put(JSONObject().apply {
+                    put("id", c.id); put("card", c.card); put("amount", c.amount)
+                    put("minimumDue", c.minimumDue ?: JSONObject.NULL); put("dueDate", c.dueDate.toString())
                 })
             }
         })
@@ -104,7 +113,11 @@ object PlanJson {
         }
         val overrides = o.optJSONArray("salaryOverrides")?.objects().orEmpty()
             .associate { LocalDate.parse(it.getString("cycle")) to it.getLong("salary") }
-        return PlanSettings(versions, debt, oneOffs, extraIncome, overrides)
+        val cardBills = o.optJSONArray("cardBills")?.objects().orEmpty().map {
+            CardBill(it.getString("id"), it.getString("card"), it.getLong("amount"),
+                if (it.isNull("minimumDue")) null else it.getLong("minimumDue"), LocalDate.parse(it.getString("dueDate")))
+        }
+        return PlanSettings(versions, debt, oneOffs, extraIncome, overrides, cardBills)
     }
 
     fun encode(s: PlanSettings): String = toJson(s).toString()

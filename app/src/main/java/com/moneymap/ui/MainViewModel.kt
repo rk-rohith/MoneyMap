@@ -100,6 +100,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         say("Investment removed", "Undo") { viewModelScope.launch { repo.saveInvestments(before) } }
     }
 
+    fun saveCardBills(bills: List<com.moneymap.core.CardBill>) = viewModelScope.launch {
+        repo.saveCardBills(bills)
+        say("Card bills updated")
+    }
+
     fun refreshNetWorth() = viewModelScope.launch { runCatching { repo.recordNetWorth() } }
 
     val categoryBudgets: StateFlow<Map<ExpenseCategory, Long>> =
