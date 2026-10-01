@@ -5,6 +5,8 @@
     <string name="widget_add_expense">+ Expense</string>
     <string name="widget_left_label">Left to spend</string>
     <string name="widget_owed_label">Others owe you</string>
+    <string name="widget_pods_description">Savings pod balances</string>
+    <string name="widget_pods_label">Pods</string>
     <string name="shortcut_log_expense">Log expense</string>
     <string name="shortcut_log_expense_long">Log an expense</string>
     <string name="shortcut_add_entry">Lend / borrow</string>

@@ -110,6 +110,9 @@ class MoneyRepository(
         return p
     }
 
+    suspend fun podMovesNow(): List<PodMove> = dao.podMoves().map { it.toDomain() }
+    suspend fun goalsNow(): List<Goal> = dao.goals().map { it.toDomain() }
+
     suspend fun expenseIds(): Set<Long> = dao.expenses().map { it.id }.toSet()
 
     suspend fun init() {
