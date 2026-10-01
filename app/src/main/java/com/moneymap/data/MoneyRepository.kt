@@ -255,6 +255,11 @@ class MoneyRepository(
         onChanged()
     }
 
+    suspend fun editExpense(expense: Expense) {
+        dao.updateExpense(expense.copy(note = expense.note.trim()).toEntity())
+        onChanged()
+    }
+
     suspend fun deleteExpense(id: Long) {
         dao.deleteExpense(id)
         onChanged()

@@ -339,6 +339,7 @@ fun MoneyMapRoot(vm: MainViewModel, onLockChanged: (Boolean) -> Boolean = { true
                 onAttachReceipt = { id, uri -> vm.attachReceipt(id, uri) },
                 onRemoveReceipt = { vm.removeReceipt(it) },
                 onSplit = { total, note, category, others -> vm.splitBill(total, note, category, others) },
+                onEditExpense = { updated, original -> vm.editExpense(updated, original) },
             )
             3 -> SaveScreen(
                 today = today, plan = plan, podMoves = podMoves, goals = goals, modifier = mod,

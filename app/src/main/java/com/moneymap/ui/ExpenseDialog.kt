@@ -26,7 +26,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
+import com.moneymap.core.ExpenseCategory
 import com.moneymap.core.formatInr
+import com.moneymap.core.parseAmount
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.OutlinedTextField
 import com.moneymap.core.long
 import com.moneymap.data.Expense
 
@@ -41,7 +47,13 @@ fun ExpenseDialog(
     onRemoveReceipt: (Long) -> Unit,
     onDelete: (Expense) -> Unit,
     onDismiss: () -> Unit,
+    onEdit: (Expense) -> Unit = {},
 ) {
+    var editing by remember(expense.id) { mutableStateOf(false) }
+    if (editing) {
+        EditExpenseDialog(expense, onSave = { onEdit(it); editing = false }, onCancel = { editing = false })
+        return
+    }
     var bitmap by remember(expense.id) { mutableStateOf<Bitmap?>(null) }
     LaunchedEffect(expense.id, hasReceipt) { bitmap = if (hasReceipt) loadReceipt(expense.id) else null }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
@@ -79,9 +91,42 @@ fun ExpenseDialog(
                 if (hasReceipt) {
                     TextButton(onClick = { onRemoveReceipt(expense.id) }) { Text("Remove photo") }
                 }
+                OutlinedButton(onClick = { editing = true }) { Text("Edit amount, note, category or date") }
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } },
         dismissButton = { TextButton(onClick = { onDelete(expense); onDismiss() }) { Text("Delete expense") } },
+    )
+}
+
+@Composable
+private fun EditExpenseDialog(expense: Expense, onSave: (Expense) -> Unit, onCancel: () -> Unit) {
+    var amount by remember { mutableStateOf(formatInr(expense.amount, withSymbol = false)) }
+    var note by remember { mutableStateOf(expense.note) }
+    var category by remember { mutableStateOf(expense.category) }
+    var date by remember { mutableStateOf(expense.date) }
+    val parsed = parseAmount(amount)
+    AlertDialog(
+        onDismissRequest = onCancel,
+        title = { Text("Edit expense") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                AmountField(amount, { amount = it }, isError = parsed == null)
+                OutlinedTextField(note, { note = it }, label = { Text("Note") }, singleLine = true,
+                    modifier = Modifier.fillMaxWidth())
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ExpenseCategory.entries.forEach { c ->
+                        FilterChip(selected = category == c, onClick = { category = c }, label = { Text(c.label) })
+                    }
+                }
+                DateField("Date", date, { if (it != null) date = it })
+            }
+        },
+        confirmButton = {
+            TextButton(enabled = parsed != null, onClick = {
+                onSave(expense.copy(amount = parsed!!, note = note.trim(), category = category, date = date))
+            }) { Text("Save") }
+        },
+        dismissButton = { TextButton(onClick = onCancel) { Text("Cancel") } },
     )
 }

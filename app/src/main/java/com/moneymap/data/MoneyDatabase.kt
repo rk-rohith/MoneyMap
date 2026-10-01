@@ -73,6 +73,9 @@ interface MoneyDao {
     @Insert
     suspend fun insertExpense(expense: ExpenseEntity): Long
 
+    @Update
+    suspend fun updateExpense(expense: ExpenseEntity)
+
     @Query("DELETE FROM expenses WHERE id = :id")
     suspend fun deleteExpense(id: Long)
 

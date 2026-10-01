@@ -282,6 +282,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         say("Added to People: ${person.trim()} owes you ${formatInr(amount)}")
     }
 
+    fun editExpense(updated: Expense, original: Expense) = viewModelScope.launch {
+        repo.editExpense(updated)
+        say("Expense updated", "Undo") { viewModelScope.launch { repo.editExpense(original) } }
+    }
+
     fun deleteExpense(expense: Expense) = viewModelScope.launch {
         repo.deleteExpense(expense.id)
         say("Deleted ${formatInr(expense.amount)}", "Undo") {

@@ -78,6 +78,7 @@ fun SpendScreen(
     onAttachReceipt: (Long, Uri) -> Unit = { _, _ -> },
     onRemoveReceipt: (Long) -> Unit = {},
     onSplit: (Long, String, ExpenseCategory, List<String>) -> Unit = { _, _, _, _ -> },
+    onEditExpense: (updated: Expense, original: Expense) -> Unit = { _, _ -> },
 ) {
     var openExpense by rememberSaveable { mutableStateOf<Long?>(null) }
     var offset by rememberSaveable { mutableLongStateOf(0L) }
@@ -280,6 +281,7 @@ fun SpendScreen(
             expense = e, hasReceipt = e.id in receiptIds, loadReceipt = loadReceipt, cameraUri = cameraUri,
             onAttach = onAttachReceipt, onRemoveReceipt = onRemoveReceipt, onDelete = onDelete,
             onDismiss = { openExpense = null },
+            onEdit = { updated -> onEditExpense(updated, e) },
         )
     }
 }
