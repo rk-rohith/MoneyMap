@@ -21,6 +21,8 @@ data class Profile(
     val goalPod: String = "Sri Lanka pod",
     /** False until the first-run setup is finished. */
     val setupDone: Boolean = true,
+    /** When the salary day falls on a Saturday or Sunday, salary arrives on the Friday before. */
+    val weekendSalaryEarly: Boolean = false,
 ) {
     init {
         require(salaryDay in 1..28) { "Salary day must be between 1 and 28" }
@@ -65,6 +67,14 @@ object Plan {
     fun cycleEnd(cycleStart: LocalDate): LocalDate = cycleStart.plusMonths(1).minusDays(1)
 
     fun cycleLabel(cycleStart: LocalDate): String = "${cycleStart.monthYear()} cycle"
+
+    /** The day salary actually arrives for the cycle starting [cycleStart] (earlier when it would hit a weekend). */
+    fun salaryDate(cycleStart: LocalDate): LocalDate = when {
+        !profile.weekendSalaryEarly -> cycleStart
+        cycleStart.dayOfWeek == java.time.DayOfWeek.SATURDAY -> cycleStart.minusDays(1)
+        cycleStart.dayOfWeek == java.time.DayOfWeek.SUNDAY -> cycleStart.minusDays(2)
+        else -> cycleStart
+    }
 
     /** Date on which something due on [day] of the month falls inside the cycle starting [cycleStart]. */
     fun occurrence(cycleStart: LocalDate, day: Int): LocalDate {
@@ -118,6 +128,9 @@ data class PlanVersion(val from: LocalDate, val config: PlanConfig)
 
 data class DebtInstalment(val date: LocalDate, val amount: Long)
 
+/** Income outside the regular plan (bonus, refund, freelance payment). It adds to its cycle's emergency pod. */
+data class ExtraIncome(val id: String, val title: String, val amount: Long, val date: LocalDate)
+
 /**
  * A one-off planned expense (yearly premium, service, festival budget). Money is set aside in its own pod
  * on salary days — spread over up to [spreadCycles] cycles ending with the cycle it's due in, but never
@@ -162,6 +175,9 @@ data class PlanSettings(
     val versions: List<PlanVersion>,
     val debt: List<DebtInstalment>,
     val oneOffs: List<OneOff> = emptyList(),
+    val extraIncome: List<ExtraIncome> = emptyList(),
+    /** Salary for single cycles that differ from the plan (keyed by cycle start), e.g. a bonus month or unpaid leave. */
+    val salaryOverrides: Map<LocalDate, Long> = emptyMap(),
 ) {
     init {
         require(versions.isNotEmpty()) { "A plan needs at least one version" }
@@ -170,7 +186,13 @@ data class PlanSettings(
     val sortedVersions: List<PlanVersion> get() = versions.sortedBy { it.from }
 
     /** The plan in force for the cycle starting [cycleStart]. Cycles before the first version use the first. */
-    fun configFor(cycleStart: LocalDate): PlanConfig =
+    fun configFor(cycleStart: LocalDate): PlanConfig {
+        val base = sortedVersions.lastOrNull { !it.from.isAfter(cycleStart) }?.config ?: sortedVersions.first().config
+        return salaryOverrides[cycleStart]?.let { base.copy(salary = it) } ?: base
+    }
+
+    /** The plan version's own config, ignoring a one-cycle salary override (what the plan editor edits). */
+    fun baseConfigFor(cycleStart: LocalDate): PlanConfig =
         sortedVersions.lastOrNull { !it.from.isAfter(cycleStart) }?.config ?: sortedVersions.first().config
 
     /** Adds or replaces the version starting at [from]. Later versions are kept. */
@@ -290,7 +312,9 @@ class PlanEngine(val settings: PlanSettings) {
     /** Budget for [cycleStart] using [cfg] (lets the settings screen preview unsaved edits). */
     fun budget(cycleStart: LocalDate, cfg: PlanConfig): CycleBudget {
         val occ = occurrences(cycleStart, cfg)
-        val otherIncome = occ.filter { it.first.flow == Flow.INCOME }.map { Line(it.first.title, it.first.amount) }
+        val otherIncome = occ.filter { it.first.flow == Flow.INCOME }.map { Line(it.first.title, it.first.amount) } +
+            settings.extraIncome.filter { Plan.cycleStartFor(it.date) == cycleStart && it.amount > 0 }
+                .map { Line(it.title, it.amount) }
         val hdfc = occ.filter { it.first.flow == Flow.HDFC }
         val salaryDay = hdfc.filter { it.second == cycleStart }.map { Line(it.first.title, it.first.amount) }
         val bills = hdfc.filter { it.second != cycleStart }.map { Line(it.first.title, it.first.amount) }
@@ -323,12 +347,15 @@ class PlanEngine(val settings: PlanSettings) {
         val cfg = config(cycleStart)
         val b = budget(cycleStart, cfg)
         val sd = cycleStart
+        // Ids keep the nominal salary day so ticks still match when the weekend rule moves the date.
+        val paid = Plan.salaryDate(cycleStart)
         val out = mutableListOf<PlanItem>()
 
-        out += PlanItem(id(sd, "salary"), sd, "Salary credited", cfg.salary, Plan.HDFC, ItemKind.INCOME,
-            detail = "Salary arrives in ${Plan.HDFC}")
+        out += PlanItem(id(sd, "salary"), paid, "Salary credited", cfg.salary, Plan.HDFC, ItemKind.INCOME,
+            detail = if (settings.salaryOverrides.containsKey(cycleStart)) "Salary arrives in ${Plan.HDFC} (changed for this cycle)"
+            else "Salary arrives in ${Plan.HDFC}")
         out += PlanItem(
-            id(sd, "salary-day"), sd, "Salary-day routine", b.transferToJupiter, "${Plan.HDFC} → ${Plan.JUPITER}",
+            id(sd, "salary-day"), paid, "Salary-day routine", b.transferToJupiter, "${Plan.HDFC} → ${Plan.JUPITER}",
             ItemKind.SALARY_DAY,
             detail = "Send ${formatInr(b.transferToJupiter)} to ${Plan.JUPITER} and split into pods",
             steps = buildList {
@@ -364,6 +391,11 @@ class PlanEngine(val settings: PlanSettings) {
             }
         }
 
+        settings.extraIncome.filter { Plan.cycleStartFor(it.date) == cycleStart && it.amount > 0 }.forEach { x ->
+            out += PlanItem(id(x.date, "extra-${x.id}"), x.date, x.title, x.amount, Plan.HDFC, ItemKind.INCOME,
+                detail = "Extra income · goes to the ${Plan.EMERGENCY_POD.lowercase()}")
+        }
+
         val end = Plan.cycleEnd(cycleStart)
         settings.oneOffs.filter { !it.date.isBefore(cycleStart) && !it.date.isAfter(end) && it.amount > 0 }.forEach { o ->
             out += PlanItem(id(o.date, "move-oneoff-${o.id}"), o.date, "Move ${o.pod} money to ${Plan.SPEND_MAIN}", o.amount,
@@ -390,11 +422,12 @@ class PlanEngine(val settings: PlanSettings) {
     fun itemsBetween(from: LocalDate, to: LocalDate): List<PlanItem> {
         val result = mutableListOf<PlanItem>()
         var cycle = Plan.cycleStartFor(from)
-        while (!cycle.isAfter(to)) {
+        // One cycle past [to]: its salary may arrive early, before the cycle starts.
+        while (!cycle.isAfter(to.plusDays(3))) {
             result += items(cycle).filter { !it.date.isBefore(from) && !it.date.isAfter(to) }
             cycle = cycle.plusMonths(1)
         }
-        return result
+        return result.sortedWith(compareBy({ it.date }, { it.kind.order }))
     }
 
     fun itemById(id: String): PlanItem? {

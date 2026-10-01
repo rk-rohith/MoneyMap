@@ -1,6 +1,7 @@
 package com.moneymap.data
 
 import com.moneymap.core.DebtInstalment
+import com.moneymap.core.ExtraIncome
 import com.moneymap.core.Flow
 import com.moneymap.core.OneOff
 import com.moneymap.core.PlanConfig
@@ -37,6 +38,18 @@ object PlanJson {
                     put("id", o.id); put("title", o.title); put("amount", o.amount); put("date", o.date.toString())
                     put("spreadCycles", o.spreadCycles); put("fundFrom", o.fundFrom.toString())
                 })
+            }
+        })
+        put("extraIncome", JSONArray().apply {
+            s.extraIncome.sortedBy { it.date }.forEach { x ->
+                put(JSONObject().apply {
+                    put("id", x.id); put("title", x.title); put("amount", x.amount); put("date", x.date.toString())
+                })
+            }
+        })
+        put("salaryOverrides", JSONArray().apply {
+            s.salaryOverrides.toSortedMap().forEach { (cycle, amount) ->
+                put(JSONObject().apply { put("cycle", cycle.toString()); put("salary", amount) })
             }
         })
     }
@@ -86,7 +99,12 @@ object PlanJson {
                 fundFrom = it.dateOrNull("fundFrom") ?: date,
             )
         }
-        return PlanSettings(versions, debt, oneOffs)
+        val extraIncome = o.optJSONArray("extraIncome")?.objects().orEmpty().map {
+            ExtraIncome(it.getString("id"), it.getString("title"), it.getLong("amount"), LocalDate.parse(it.getString("date")))
+        }
+        val overrides = o.optJSONArray("salaryOverrides")?.objects().orEmpty()
+            .associate { LocalDate.parse(it.getString("cycle")) to it.getLong("salary") }
+        return PlanSettings(versions, debt, oneOffs, extraIncome, overrides)
     }
 
     fun encode(s: PlanSettings): String = toJson(s).toString()

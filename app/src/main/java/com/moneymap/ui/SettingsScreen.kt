@@ -48,6 +48,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.moneymap.core.DebtInstalment
+import com.moneymap.core.ExtraIncome
 import com.moneymap.core.Flow
 import com.moneymap.core.OneOff
 import com.moneymap.core.Plan
@@ -199,11 +200,12 @@ private fun ProfileCard(profile: Profile, onSave: (Profile) -> Unit) {
     var spendAccount by remember(profile) { mutableStateOf(profile.spendAccount) }
     var goalPod by remember(profile) { mutableStateOf(profile.goalPod) }
     var lender by remember(profile) { mutableStateOf(profile.lenderName) }
+    var weekendEarly by remember(profile) { mutableStateOf(profile.weekendSalaryEarly) }
     var loanText by remember(profile) { mutableStateOf(if (profile.loanTotal > 0) formatInr(profile.loanTotal, withSymbol = false) else "") }
     val loan = if (loanText.isBlank()) 0L else parseAmount(loanText)
     val edited = profile.copy(
         salaryAccount = salaryAccount.trim(), spendAccount = spendAccount.trim(), goalPod = goalPod.trim(),
-        lenderName = lender.trim(), loanTotal = loan ?: profile.loanTotal,
+        lenderName = lender.trim(), loanTotal = loan ?: profile.loanTotal, weekendSalaryEarly = weekendEarly,
     )
     val valid = loan != null && listOf(salaryAccount, spendAccount, goalPod, lender).all { it.isNotBlank() }
     OutlinedCard(Modifier.fillMaxWidth()) {
@@ -211,6 +213,11 @@ private fun ProfileCard(profile: Profile, onSave: (Profile) -> Unit) {
             Text("Accounts & loan", style = MaterialTheme.typography.titleMedium)
             Text("Salary day: ${profile.salaryDay} (set when the app was first set up; changing it would move every " +
                 "past cycle).", style = MaterialTheme.typography.bodySmall)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Salary comes the Friday before when salary day is a weekend",
+                    Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                Switch(checked = weekendEarly, onCheckedChange = { weekendEarly = it })
+            }
             OutlinedTextField(salaryAccount, { salaryAccount = it }, label = { Text("Salary account (bills paid from)") },
                 singleLine = true, isError = salaryAccount.isBlank(), modifier = Modifier.fillMaxWidth())
             OutlinedTextField(spendAccount, { spendAccount = it }, label = { Text("Spending account (holds the pods)") },
@@ -275,14 +282,20 @@ private fun PlanEditor(today: LocalDate, plan: PlanEngine, onSave: (PlanSettings
     val settings = plan.settings
     var offset by rememberSaveable { mutableLongStateOf(0L) }
     val from = Plan.cycleStartFor(today).plusMonths(offset)
-    var draft by remember(from, settings) { mutableStateOf(plan.config(from)) }
+    var draft by remember(from, settings) { mutableStateOf(settings.baseConfigFor(from)) }
     var debt by remember(settings) { mutableStateOf(settings.debt.sortedBy { it.date }) }
     var oneOffs by remember(settings) { mutableStateOf(settings.oneOffs.sortedBy { it.date }) }
+    var extra by remember(settings) { mutableStateOf(settings.extraIncome.sortedBy { it.date }) }
+    var overrides by remember(settings) { mutableStateOf(settings.salaryOverrides) }
+    var addExtra by remember { mutableStateOf(false) }
+    var overrideText by remember(from, settings) {
+        mutableStateOf(settings.salaryOverrides[from]?.let { formatInr(it, withSymbol = false) } ?: "")
+    }
     var editOneOff by remember { mutableStateOf<OneOff?>(null) }
     var addOneOff by remember { mutableStateOf(false) }
     var showYear by rememberSaveable { mutableStateOf(false) }
-    var salaryText by remember(from, settings) { mutableStateOf(formatInr(plan.config(from).salary, withSymbol = false)) }
-    var budgetText by remember(from, settings) { mutableStateOf(formatInr(plan.config(from).spendBudget, withSymbol = false)) }
+    var salaryText by remember(from, settings) { mutableStateOf(formatInr(settings.baseConfigFor(from).salary, withSymbol = false)) }
+    var budgetText by remember(from, settings) { mutableStateOf(formatInr(settings.baseConfigFor(from).spendBudget, withSymbol = false)) }
     var editItem by remember { mutableStateOf<RecurringItem?>(null) }
     var addItem by remember { mutableStateOf(false) }
     var addDebt by remember { mutableStateOf(false) }
@@ -291,12 +304,17 @@ private fun PlanEditor(today: LocalDate, plan: PlanEngine, onSave: (PlanSettings
     val salary = parseAmount(salaryText)
     val budget = parseAmount(budgetText)
     val working = draft.copy(salary = salary ?: draft.salary, spendBudget = budget ?: draft.spendBudget)
-    val draftSettings = settings.withVersion(from, working).copy(debt = debt, oneOffs = oneOffs)
+    val overrideValue = if (overrideText.isBlank()) null else parseAmount(overrideText)
+    val overrideValid = overrideText.isBlank() || overrideValue != null
+    val workingOverrides = if (overrideValue == null) overrides - from else overrides + (from to overrideValue)
+    val draftSettings = settings.withVersion(from, working)
+        .copy(debt = debt, oneOffs = oneOffs, extraIncome = extra, salaryOverrides = workingOverrides)
     val previewEngine = PlanEngine(draftSettings)
     val before = plan.budget(from)
     val after = previewEngine.budget(from)
-    val changed = working != plan.config(from) || debt != settings.debt.sortedBy { it.date } ||
-        oneOffs != settings.oneOffs.sortedBy { it.date }
+    val changed = working != settings.baseConfigFor(from) || debt != settings.debt.sortedBy { it.date } ||
+        oneOffs != settings.oneOffs.sortedBy { it.date } || extra != settings.extraIncome.sortedBy { it.date } ||
+        workingOverrides != settings.salaryOverrides
 
     OutlinedCard(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -321,6 +339,11 @@ private fun PlanEditor(today: LocalDate, plan: PlanEngine, onSave: (PlanSettings
             OutlinedTextField(budgetText, { v -> budgetText = v.filter { it.isDigit() || it == ',' } },
                 label = { Text("Monthly spending budget (₹, ${Plan.SPEND_MAIN})") }, singleLine = true, isError = budget == null,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(overrideText, { v -> overrideText = v.filter { it.isDigit() || it == ',' } },
+                label = { Text("Salary for ${from.monthYear()} cycle only (₹)") },
+                supportingText = { Text("Leave blank to use the plan. For a bonus month, a raise not yet in the plan, or unpaid leave.") },
+                singleLine = true, isError = !overrideValid,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth())
 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Regular items", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
@@ -342,7 +365,7 @@ private fun PlanEditor(today: LocalDate, plan: PlanEngine, onSave: (PlanSettings
 
             HorizontalDivider()
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("₹2L loan repayments", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                Text("Loan repayments", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
                 TextButton(onClick = { addDebt = true }) {
                     Icon(Icons.Filled.Add, contentDescription = null)
                     Text("Add")
@@ -384,6 +407,29 @@ private fun PlanEditor(today: LocalDate, plan: PlanEngine, onSave: (PlanSettings
             }
 
             HorizontalDivider()
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Extra income", style = MaterialTheme.typography.titleSmall)
+                    Text("Bonuses, refunds, freelance pay… added to that cycle's emergency pod",
+                        style = MaterialTheme.typography.bodySmall)
+                }
+                TextButton(onClick = { addExtra = true }) {
+                    Icon(Icons.Filled.Add, contentDescription = null)
+                    Text("Add")
+                }
+            }
+            extra.forEach { x ->
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(x.title, style = MaterialTheme.typography.bodyLarge)
+                        Text(x.date.long(), style = MaterialTheme.typography.bodySmall)
+                    }
+                    Text("+" + formatInr(x.amount))
+                    IconButton(onClick = { extra = extra - x }) { Icon(Icons.Filled.Delete, contentDescription = "Remove") }
+                }
+            }
+
+            HorizontalDivider()
             Text("Emergency fund in ${from.monthYear()} cycle: ${formatInr(after.emergencyPod)}" +
                 if (after.emergencyPod != before.emergencyPod) " (now ${formatInr(before.emergencyPod)})" else "",
                 style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold,
@@ -397,7 +443,7 @@ private fun PlanEditor(today: LocalDate, plan: PlanEngine, onSave: (PlanSettings
             }
             if (showYear) YearTable(from, plan, previewEngine, changed)
             Button(
-                enabled = changed && salary != null && budget != null,
+                enabled = changed && salary != null && budget != null && overrideValid,
                 onClick = { onSave(draftSettings) },
                 modifier = Modifier.fillMaxWidth(),
             ) { Text("Save plan from ${from.monthYear()}") }
@@ -446,6 +492,9 @@ private fun PlanEditor(today: LocalDate, plan: PlanEngine, onSave: (PlanSettings
                 addOneOff = false; editOneOff = null
             },
         )
+    }
+    if (addExtra) {
+        ExtraIncomeDialog(onDismiss = { addExtra = false }) { x -> extra = (extra + x).sortedBy { it.date }; addExtra = false }
     }
     if (addDebt) {
         DebtDialog(onDismiss = { addDebt = false }) { d -> debt = (debt + d).sortedBy { it.date }; addDebt = false }
@@ -561,6 +610,32 @@ private fun ItemDialog(
         ConfirmDialog("Remove ${existing.title}?", "It stops from the chosen cycle once you save the plan.", "Remove",
             onConfirm = { onDelete(existing.id) }, onDismiss = { confirmDelete = false })
     }
+}
+
+@Composable
+private fun ExtraIncomeDialog(onDismiss: () -> Unit, onAdd: (ExtraIncome) -> Unit) {
+    var title by rememberSaveable { mutableStateOf("") }
+    var amount by rememberSaveable { mutableStateOf("") }
+    var date by remember { mutableStateOf(LocalDate.now()) }
+    val parsed = parseAmount(amount)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Add extra income") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(title, { title = it }, label = { Text("What (e.g. Bonus)") }, singleLine = true,
+                    modifier = Modifier.fillMaxWidth())
+                AmountField(amount, { amount = it })
+                DateField("Arrives", date, { if (it != null) date = it })
+            }
+        },
+        confirmButton = {
+            TextButton(enabled = parsed != null && title.isNotBlank(), onClick = {
+                parsed?.let { onAdd(ExtraIncome("x${System.currentTimeMillis()}", title.trim(), it, date)) }
+            }) { Text("Add") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
 }
 
 @Composable

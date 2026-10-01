@@ -16,6 +16,7 @@ object ProfileJson {
         put("loanTotal", p.loanTotal)
         put("goalPod", p.goalPod)
         put("setupDone", p.setupDone)
+        put("weekendSalaryEarly", p.weekendSalaryEarly)
     }.toString()
 
     /** Missing values fall back to the original setup's defaults; unreadable text gives null. */
@@ -32,6 +33,7 @@ object ProfileJson {
                 loanTotal = o.optLong("loanTotal", d.loanTotal).coerceAtLeast(0),
                 goalPod = o.optString("goalPod", d.goalPod).ifBlank { d.goalPod },
                 setupDone = o.optBoolean("setupDone", true),
+                weekendSalaryEarly = o.optBoolean("weekendSalaryEarly", false),
             )
         }.getOrNull()
     }

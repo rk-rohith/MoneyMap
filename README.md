@@ -20,6 +20,8 @@ CI (`.github/workflows/build-apk.yml`) runs tests, builds, lints and uploads the
   salary on the 25th) without being asked. Account names, the extra savings pod and the loan can be changed later
   in Settings → Accounts & loan.
 
+- **Uneven income**: a different salary for a single cycle, dated extra income (bonus, refund) that tops up that
+  cycle's emergency pod, and an option to move salary day to the Friday before when it falls on a weekend.
 - **Month**: overdue alerts, next-up card, cycle navigation, salary split, payment checklist with undo.
 - **Spend**: log expenses by category, see where the budget went, browse past cycles, "paid for someone" → People.
 - **People**: money lent and borrowed, partial returns, reminders on due dates.

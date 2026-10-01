@@ -58,3 +58,52 @@ class ProfileTest {
         assertEquals(14_000, PlanEngine(settings).budget(start).emergencyPod)
     }
 }
+
+class VariableIncomeTest {
+    private val start = LocalDate.of(2026, 10, 25)
+
+    @After
+    fun restore() {
+        Plan.profile = Profile()
+    }
+
+    @Test
+    fun salaryOverrideAppliesToOneCycleOnly() {
+        val settings = DefaultPlan.settings.copy(salaryOverrides = mapOf(start to 200_000L))
+        val engine = PlanEngine(settings)
+        val base = DefaultPlan.engine.budget(start)
+        assertEquals(200_000, engine.budget(start).salary)
+        assertEquals(base.emergencyPod + 40_000, engine.budget(start).emergencyPod)
+        assertEquals(160_000, engine.budget(start.plusMonths(1)).salary)
+        assertEquals(160_000, settings.baseConfigFor(start).salary)
+        assertTrue(engine.items(start).first { it.id.endsWith(":salary") }.detail.contains("changed"))
+    }
+
+    @Test
+    fun extraIncomeAddsToItsCycle() {
+        val bonus = ExtraIncome("b1", "Diwali bonus", 25_000, LocalDate.of(2026, 11, 3))
+        val engine = PlanEngine(DefaultPlan.settings.copy(extraIncome = listOf(bonus)))
+        val b = engine.budget(start)
+        assertTrue(b.otherIncome.any { it.label == "Diwali bonus" && it.amount == 25_000L })
+        assertEquals(DefaultPlan.engine.budget(start).emergencyPod + 25_000, b.emergencyPod)
+        val item = engine.itemById("2026-11-03:extra-b1")!!
+        assertEquals(ItemKind.INCOME, item.kind)
+        assertFalse(item.notifies)
+        assertEquals(DefaultPlan.engine.budget(start.plusMonths(1)), engine.budget(start.plusMonths(1)))
+    }
+
+    @Test
+    fun weekendSalaryArrivesOnFriday() {
+        // 25 Oct 2026 is a Sunday.
+        Plan.profile = Profile(weekendSalaryEarly = true)
+        val items = DefaultPlan.engine.items(start)
+        val salary = items.first { it.id == "2026-10-25:salary-day" }
+        assertEquals(LocalDate.of(2026, 10, 23), salary.date)
+        assertEquals(salary, DefaultPlan.engine.itemById("2026-10-25:salary-day"))
+        // Found when looking at the days before the cycle starts.
+        assertTrue(DefaultPlan.engine.itemsBetween(LocalDate.of(2026, 10, 20), LocalDate.of(2026, 10, 23))
+            .any { it.id == "2026-10-25:salary-day" })
+        Plan.profile = Profile()
+        assertEquals(start, DefaultPlan.engine.items(start).first { it.id == "2026-10-25:salary-day" }.date)
+    }
+}

@@ -62,3 +62,29 @@ class BackupJsonTest {
         assertNull(back.plan)
     }
 }
+
+class PlanAndProfileJsonTest {
+    @org.junit.Test
+    fun extraIncomeAndOverridesRoundTrip() {
+        val settings = com.moneymap.core.DefaultPlan.settings.copy(
+            extraIncome = listOf(com.moneymap.core.ExtraIncome("x1", "Bonus", 25_000, java.time.LocalDate.of(2026, 11, 3))),
+            salaryOverrides = mapOf(java.time.LocalDate.of(2026, 12, 25) to 120_000L),
+        )
+        org.junit.Assert.assertEquals(settings, PlanJson.decode(PlanJson.encode(settings)))
+        // Plans saved before these fields existed still load.
+        val old = org.json.JSONObject(PlanJson.encode(com.moneymap.core.DefaultPlan.settings))
+        old.remove("extraIncome"); old.remove("salaryOverrides")
+        org.junit.Assert.assertEquals(com.moneymap.core.DefaultPlan.settings, PlanJson.decode(old.toString()))
+    }
+
+    @org.junit.Test
+    fun profileRoundTripAndDefaults() {
+        val p = com.moneymap.core.Profile(salaryDay = 1, salaryAccount = "SBI", spendAccount = "Wallet",
+            trackStart = java.time.LocalDate.of(2027, 1, 1), loanTotal = 0, goalPod = "House pod",
+            setupDone = false, weekendSalaryEarly = true)
+        org.junit.Assert.assertEquals(p, ProfileJson.decode(ProfileJson.encode(p)))
+        org.junit.Assert.assertEquals(com.moneymap.core.Profile(), ProfileJson.decode("{}"))
+        org.junit.Assert.assertNull(ProfileJson.decode("not json"))
+        org.junit.Assert.assertNull(ProfileJson.decode(null))
+    }
+}
