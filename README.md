@@ -44,7 +44,10 @@ CI (`.github/workflows/build-apk.yml`) runs tests, builds, lints and uploads the
 - **People**: money lent and borrowed, partial returns, reminders on due dates.
 - **Save**: pod balances (filled by ticking the salary-day routine, emptied by debt/pod-move ticks, topped up by returns) and goals with "save ₹X per cycle".
 - **Home-screen widgets**: a summary widget (next payment, what's left to spend, what others owe, + Expense) and a
-  Pods widget with savings pod balances.
+  Pods widget with savings pod balances. Both follow light/dark mode, and on Android 12+ take their colours from
+  the wallpaper.
+- **Pod shortcuts**: long-press the app icon for your two biggest pods, or pin any pod to the home screen (open a pod
+  on Save → "Add a shortcut to the home screen"); a shortcut opens Add money for that pod.
 - **One-line entry**: type or say "250 lunch zomato" (or "petrol 1.5k yesterday") in Log expense / Quick add and the
   amount, note, category and date fill themselves; edit any logged expense by tapping it.
 - **Quick add**: long-press the app icon for "Log expense" or "Lend / borrow", or add the "Log expense" Quick Settings

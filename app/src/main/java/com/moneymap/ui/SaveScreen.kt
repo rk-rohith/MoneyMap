@@ -68,6 +68,9 @@ fun SaveScreen(
     onDeleteGoal: (Long) -> Unit,
     modifier: Modifier = Modifier,
     onApplyAutopilot: (List<Pair<String, Long>>) -> Unit = {},
+    focusPod: String? = null,
+    onFocusPodShown: () -> Unit = {},
+    onPinPod: (String) -> Unit = {},
 ) {
     val planPods = Pods.planPods(plan, Plan.cycleStartFor(today))
     val balances = Pods.balances(podMoves, planPods + goals.map { it.pod })
@@ -75,6 +78,12 @@ fun SaveScreen(
     var newGoal by remember { mutableStateOf(false) }
     var deleteGoal by remember { mutableStateOf<Goal?>(null) }
     var moveDialog by remember { mutableStateOf<Pair<String, Boolean>?>(null) }
+    androidx.compose.runtime.LaunchedEffect(focusPod) {
+        if (focusPod != null) {
+            moveDialog = focusPod to false
+            onFocusPodShown()
+        }
+    }
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
@@ -112,6 +121,7 @@ fun SaveScreen(
         }
         items(balances, key = { "pod-${it.pod}" }) { p ->
             PodCard(p,
+                onPin = { onPinPod(p.pod) },
                 onAdd = { moveDialog = p.pod to false },
                 onWithdraw = { moveDialog = p.pod to true },
                 onDeleteMove = onDeletePodMove)
@@ -172,7 +182,7 @@ private fun GoalCard(goal: Goal, saved: Long, today: LocalDate, onEdit: () -> Un
 }
 
 @Composable
-private fun PodCard(p: PodBalance, onAdd: () -> Unit, onWithdraw: () -> Unit, onDeleteMove: (Long) -> Unit) {
+private fun PodCard(p: PodBalance, onAdd: () -> Unit, onWithdraw: () -> Unit, onDeleteMove: (Long) -> Unit, onPin: () -> Unit = {}) {
     var open by rememberSaveable(p.pod) { mutableStateOf(false) }
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
@@ -190,6 +200,7 @@ private fun PodCard(p: PodBalance, onAdd: () -> Unit, onWithdraw: () -> Unit, on
                 OutlinedButton(onClick = onWithdraw) { Text("Withdraw") }
             }
             if (open) {
+                TextButton(onClick = onPin) { Text("Add a shortcut to the home screen") }
                 if (p.moves.isEmpty()) {
                     Text("No movements yet.", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp))
                 }

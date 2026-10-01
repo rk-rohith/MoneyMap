@@ -40,7 +40,7 @@ import kotlinx.coroutines.launch
 import java.time.LocalDate
 
 /** Something the UI should open, e.g. from a notification tap. */
-data class OpenRequest(val entryId: Long?, val record: Boolean, val tab: Int?)
+data class OpenRequest(val entryId: Long?, val record: Boolean, val tab: Int?, val pod: String? = null)
 
 /** Files to share; [targetPackage] picks one app (e.g. Google Drive) instead of the share sheet. */
 data class ExportRequest(val uris: List<Uri>, val targetPackage: String?)
@@ -258,6 +258,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun openFromIntent(entryId: Long?, record: Boolean, tab: Int?) {
         if (entryId != null || tab != null) _openRequest.value = OpenRequest(entryId, record, tab)
+    }
+
+    /** From a pod shortcut: open Save with "Add money" for [pod]. */
+    fun openPod(pod: String) {
+        _openRequest.value = OpenRequest(entryId = null, record = false, tab = 3, pod = pod)
+    }
+
+    fun pinPodShortcut(pod: String) {
+        if (!com.moneymap.notify.PodShortcuts.requestPin(getApplication(), pod)) say("Your home screen doesn't support shortcuts")
     }
 
     fun consumeOpenRequest() {

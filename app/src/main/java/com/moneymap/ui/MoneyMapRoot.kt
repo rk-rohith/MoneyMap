@@ -69,6 +69,7 @@ fun MoneyMapRoot(vm: MainViewModel, onLockChanged: (Boolean) -> Boolean = { true
     var searchOpen by rememberSaveable { mutableStateOf(false) }
     var reportsOpen by rememberSaveable { mutableStateOf(false) }
     var wealthOpen by rememberSaveable { mutableStateOf(false) }
+    var focusPod by rememberSaveable { mutableStateOf<String?>(null) }
     val loans by vm.loans.collectAsStateWithLifecycle()
     val investments by vm.investments.collectAsStateWithLifecycle()
     val netWorthHistory by vm.netWorthHistory.collectAsStateWithLifecycle()
@@ -142,6 +143,10 @@ fun MoneyMapRoot(vm: MainViewModel, onLockChanged: (Boolean) -> Boolean = { true
     LaunchedEffect(openRequest) {
         val req = openRequest ?: return@LaunchedEffect
         req.tab?.let { tab = it }
+        req.pod?.let {
+            settingsOpen = false; searchOpen = false; reportsOpen = false; wealthOpen = false; detailId = null; formOpen = false
+            focusPod = it
+        }
         if (req.entryId != null) {
             tab = 2
             formOpen = false
@@ -381,6 +386,9 @@ fun MoneyMapRoot(vm: MainViewModel, onLockChanged: (Boolean) -> Boolean = { true
                 onSaveGoal = { vm.saveGoal(it) },
                 onDeleteGoal = { vm.deleteGoal(it) },
                 onApplyAutopilot = { vm.applyAutopilot(it) },
+                focusPod = focusPod,
+                onFocusPodShown = { focusPod = null },
+                onPinPod = { vm.pinPodShortcut(it) },
             )
             else -> PeopleScreen(
                 entries = entries, today = today, modifier = mod,

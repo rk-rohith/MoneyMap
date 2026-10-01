@@ -156,6 +156,9 @@ class MainActivity : FragmentActivity() {
         )
         if (intent.action == ACTION_QUICK_ADD || intent.getBooleanExtra(EXTRA_QUICK_ADD, false)) viewModel.showQuickAdd()
         if (intent.action == ACTION_ADD_ENTRY) viewModel.showAddEntry()
+        if (intent.action == com.moneymap.notify.PodShortcuts.ACTION_POD) {
+            intent.getStringExtra(com.moneymap.notify.PodShortcuts.EXTRA_POD)?.let(viewModel::openPod)
+        }
         if (intent.getBooleanExtra(EXTRA_TEST_NOTIFICATION, false)) viewModel.sendTestNotification()
     }
 

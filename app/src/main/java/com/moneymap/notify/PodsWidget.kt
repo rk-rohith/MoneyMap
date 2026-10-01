@@ -36,13 +36,13 @@ class PodsWidget : AppWidgetProvider() {
         suspend fun update(context: Context, repo: MoneyRepository) {
             val manager = AppWidgetManager.getInstance(context) ?: return
             val ids = manager.getAppWidgetIds(ComponentName(context, PodsWidget::class.java))
-            if (ids.isEmpty()) return
             val engine = repo.planNow()
             val extra = Pods.planPods(engine, Plan.cycleStartFor(LocalDate.now())) + repo.goalsNow().map { it.pod }
             val balances = Pods.balances(repo.podMovesNow(), extra)
                 .filter { it.balance != 0L || it.pod == Plan.EMERGENCY_POD }
                 .sortedByDescending { it.balance }
             val shown = balances.take(MAX_ROWS)
+            PodShortcuts.publish(context, balances.filter { it.balance > 0 }.map { it.pod })
             val views = RemoteViews(context.packageName, R.layout.widget_pods).apply {
                 setTextViewText(R.id.pods_names, shown.joinToString("\n") { it.pod }.ifEmpty { "No pods yet" })
                 setTextViewText(R.id.pods_amounts, shown.joinToString("\n") { formatInr(it.balance) })
@@ -52,7 +52,7 @@ class PodsWidget : AppWidgetProvider() {
                     putExtra(MainActivity.EXTRA_TAB, 3)
                 })
             }
-            manager.updateAppWidget(ids, views)
+            if (ids.isNotEmpty()) manager.updateAppWidget(ids, views)
         }
     }
 }
