@@ -71,3 +71,22 @@ class ReportsTest {
         assertTrue(Reports.recurring(emptyList(), today).isEmpty())
     }
 }
+
+class SearchFilterTest {
+    private val today = java.time.LocalDate.of(2026, 11, 2) // Oct 2026 cycle
+
+    @Test
+    fun periodsAmountsAndCategory() {
+        val f = SearchFilter(SearchPeriod.THIS_CYCLE, minAmount = 100, maxAmount = 1_000, category = ExpenseCategory.FOOD)
+        assertTrue(f.active)
+        assertTrue(f.accepts(java.time.LocalDate.of(2026, 10, 25), 500, today, ExpenseCategory.FOOD))
+        org.junit.Assert.assertFalse(f.accepts(java.time.LocalDate.of(2026, 10, 24), 500, today, ExpenseCategory.FOOD))
+        org.junit.Assert.assertFalse(f.accepts(java.time.LocalDate.of(2026, 10, 26), 50, today, ExpenseCategory.FOOD))
+        org.junit.Assert.assertFalse(f.accepts(java.time.LocalDate.of(2026, 10, 26), 5_000, today, ExpenseCategory.FOOD))
+        org.junit.Assert.assertFalse(f.accepts(java.time.LocalDate.of(2026, 10, 26), 500, today, ExpenseCategory.FUN))
+        // Pod withdrawals are negative; the filter compares sizes.
+        assertTrue(SearchFilter(minAmount = 100).accepts(today, -500, today))
+        assertEquals(java.time.LocalDate.of(2026, 9, 25)..java.time.LocalDate.of(2026, 10, 24), SearchPeriod.LAST_CYCLE.range(today))
+        org.junit.Assert.assertFalse(SearchFilter().active)
+    }
+}

@@ -232,6 +232,7 @@ fun MoneyMapRoot(vm: MainViewModel, onLockChanged: (Boolean) -> Boolean = { true
         BackHandler { searchOpen = false }
         SearchScreen(
             entries = entries, expenses = expenses, podMoves = podMoves,
+            today = today,
             onOpenEntry = { detailId = it },
             onBack = { searchOpen = false },
         )

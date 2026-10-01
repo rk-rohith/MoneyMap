@@ -40,6 +40,12 @@ import com.moneymap.core.Direction
 import com.moneymap.core.EntryWithTxns
 import com.moneymap.core.PodMove
 import com.moneymap.core.Search
+import com.moneymap.core.SearchFilter
+import com.moneymap.core.SearchPeriod
+import com.moneymap.core.ExpenseCategory
+import com.moneymap.core.parseAmount
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import com.moneymap.core.formatInr
 import com.moneymap.core.long
 import com.moneymap.data.Expense
@@ -64,28 +70,42 @@ fun SearchScreen(
     onOpenEntry: (Long) -> Unit,
     onBack: () -> Unit,
     initialQuery: String = "",
+    today: LocalDate = LocalDate.now(),
 ) {
     var query by rememberSaveable { mutableStateOf(initialQuery) }
     var scope by rememberSaveable { mutableStateOf(SearchScope.ALL) }
+    var period by rememberSaveable { mutableStateOf(SearchPeriod.ANY) }
+    var minText by rememberSaveable { mutableStateOf("") }
+    var maxText by rememberSaveable { mutableStateOf("") }
+    var category by rememberSaveable { mutableStateOf<ExpenseCategory?>(null) }
+    var showFilters by rememberSaveable { mutableStateOf(false) }
+    val filter = SearchFilter(period, parseAmount(minText), parseAmount(maxText), category)
+    // With a filter set, an empty query lists everything the filter lets through.
+    fun matches(fields: List<String?>, amounts: List<Long>) =
+        if (query.isBlank()) filter.active else Search.matches(query, fields, amounts)
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
 
-    val hits = remember(query, scope, entries, expenses, podMoves) {
-        if (query.isBlank()) emptyList() else buildList<Hit> {
+    val hits = remember(query, scope, filter, entries, expenses, podMoves, today) {
+        if (query.isBlank() && !filter.active) emptyList() else buildList<Hit> {
             if (scope == SearchScope.ALL || scope == SearchScope.EXPENSES) {
-                expenses.filter { Search.matches(query, listOf(it.note, it.category.label), listOf(it.amount)) }
-                    .forEach { add(Hit.ExpenseHit(it)) }
+                expenses.filter {
+                    filter.accepts(it.date, it.amount, today, it.category) &&
+                        matches(listOf(it.note, it.category.label), listOf(it.amount))
+                }.forEach { add(Hit.ExpenseHit(it)) }
             }
-            if (scope == SearchScope.ALL || scope == SearchScope.PEOPLE) {
+            // A category only applies to expenses.
+            if ((scope == SearchScope.ALL || scope == SearchScope.PEOPLE) && filter.category == null) {
                 entries.filter { e ->
-                    Search.matches(query,
-                        listOf(e.entry.person, e.entry.reason, e.entry.notes, e.status.label) + e.txns.map { it.note },
-                        listOf(e.entry.amount, e.outstanding) + e.txns.map { it.amount })
+                    filter.accepts(e.entry.date, e.entry.amount, today) &&
+                        matches(listOf(e.entry.person, e.entry.reason, e.entry.notes, e.status.label) + e.txns.map { it.note },
+                            listOf(e.entry.amount, e.outstanding) + e.txns.map { it.amount })
                 }.forEach { add(Hit.EntryHit(it)) }
             }
-            if (scope == SearchScope.ALL || scope == SearchScope.PODS) {
-                podMoves.filter { Search.matches(query, listOf(it.pod, it.note), listOf(abs(it.amount))) }
-                    .forEach { add(Hit.PodHit(it)) }
+            if ((scope == SearchScope.ALL || scope == SearchScope.PODS) && filter.category == null) {
+                podMoves.filter {
+                    filter.accepts(it.date, it.amount, today) && matches(listOf(it.pod, it.note), listOf(abs(it.amount)))
+                }.forEach { add(Hit.PodHit(it)) }
             }
         }.sortedByDescending { it.date }
     }
@@ -124,9 +144,45 @@ fun SearchScreen(
                     SearchScope.entries.forEach { s ->
                         FilterChip(selected = scope == s, onClick = { scope = s }, label = { Text(s.label) })
                     }
+                    FilterChip(selected = showFilters || filter.active, onClick = { showFilters = !showFilters },
+                        label = { Text(if (filter.active) "Filters on" else "Filters") })
                 }
             }
-            if (query.isNotBlank()) {
+            if (showFilters) {
+                item {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            SearchPeriod.entries.forEach { p ->
+                                FilterChip(selected = period == p, onClick = { period = p }, label = { Text(p.label) })
+                            }
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedTextField(minText, { v -> minText = v.filter { it.isDigit() || it == ',' } },
+                                label = { Text("Min ₹") }, singleLine = true, modifier = Modifier.weight(1f),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+                            OutlinedTextField(maxText, { v -> maxText = v.filter { it.isDigit() || it == ',' } },
+                                label = { Text("Max ₹") }, singleLine = true, modifier = Modifier.weight(1f),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+                        }
+                        if (scope == SearchScope.ALL || scope == SearchScope.EXPENSES) {
+                            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                ExpenseCategory.entries.forEach { c ->
+                                    FilterChip(selected = category == c, onClick = { category = if (category == c) null else c },
+                                        label = { Text(c.label) })
+                                }
+                            }
+                        }
+                        if (filter.active) {
+                            androidx.compose.material3.TextButton(onClick = {
+                                period = SearchPeriod.ANY; minText = ""; maxText = ""; category = null
+                            }) { Text("Clear filters") }
+                            val total = hits.filterIsInstance<Hit.ExpenseHit>().sumOf { it.e.amount }
+                            if (total > 0) Text("Expenses in results: ${formatInr(total)}", style = MaterialTheme.typography.bodyMedium)
+                        }
+                    }
+                }
+            }
+            if (query.isNotBlank() || filter.active) {
                 item {
                     Text(if (hits.isEmpty()) "No matches" else "${hits.size} match${if (hits.size == 1) "" else "es"}",
                         style = MaterialTheme.typography.labelMedium)
