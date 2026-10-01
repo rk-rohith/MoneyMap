@@ -245,7 +245,7 @@ private fun CategoryBudgetDialog(
                     item {
                         OutlinedTextField(
                             texts.getValue(c), { v -> texts = texts + (c to v.filter { it.isDigit() || it == ',' }) },
-                            label = { Text(c.label) }, singleLine = true, prefix = { Text("₹") },
+                            label = { Text(c.label) }, singleLine = true, prefix = { Text(Plan.CURRENCY) },
                             isError = parsed[c] == null,
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             modifier = Modifier.fillMaxWidth(),

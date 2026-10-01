@@ -296,7 +296,7 @@ private fun PaymentCard(
 private fun LoanProgress(loan: EntryWithTxns, onOpen: () -> Unit) {
     Column(Modifier.padding(top = 8.dp).clickable(onClick = onOpen)) {
         Text(
-            "₹2L loan: ${formatInr(loan.settled)} repaid · ${formatInr(loan.outstanding)} left",
+            "Loan: ${formatInr(loan.settled)} repaid · ${formatInr(loan.outstanding)} left",
             style = MaterialTheme.typography.labelMedium,
         )
         LinearProgressIndicator(

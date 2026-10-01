@@ -158,10 +158,10 @@ fun SearchScreen(
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             OutlinedTextField(minText, { v -> minText = v.filter { it.isDigit() || it == ',' } },
-                                label = { Text("Min ₹") }, singleLine = true, modifier = Modifier.weight(1f),
+                                label = { Text("Min ${com.moneymap.core.Plan.CURRENCY}") }, singleLine = true, modifier = Modifier.weight(1f),
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
                             OutlinedTextField(maxText, { v -> maxText = v.filter { it.isDigit() || it == ',' } },
-                                label = { Text("Max ₹") }, singleLine = true, modifier = Modifier.weight(1f),
+                                label = { Text("Max ${com.moneymap.core.Plan.CURRENCY}") }, singleLine = true, modifier = Modifier.weight(1f),
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
                         }
                         if (scope == SearchScope.ALL || scope == SearchScope.EXPENSES) {

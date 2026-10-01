@@ -6,13 +6,20 @@ import java.util.Locale
 import kotlin.math.abs
 
 /**
- * Formats a rupee amount using the Indian grouping system: ₹1,68,000 / ₹12,34,567.
- * Amounts are whole rupees.
+ * Formats a whole-unit amount in the profile's currency: ₹1,68,000 with Indian grouping (the default),
+ * or e.g. $168,000 with international grouping. The name is kept from when the app only knew rupees.
  */
-fun formatInr(amount: Long, withSymbol: Boolean = true): String {
+fun formatInr(
+    amount: Long,
+    withSymbol: Boolean = true,
+    symbol: String = Plan.profile.currencySymbol,
+    indian: Boolean = Plan.profile.indianGrouping,
+): String {
     val digits = abs(amount).toString()
     val grouped = if (digits.length <= 3) {
         digits
+    } else if (!indian) {
+        digits.reversed().chunked(3).joinToString(",").reversed()
     } else {
         val last3 = digits.takeLast(3)
         val rest = digits.dropLast(3)
@@ -24,12 +31,13 @@ fun formatInr(amount: Long, withSymbol: Boolean = true): String {
         sb.reverse().toString() + "," + last3
     }
     val sign = if (amount < 0) "-" else ""
-    return sign + (if (withSymbol) "₹" else "") + grouped
+    return sign + (if (withSymbol) symbol else "") + grouped
 }
 
 /** Parses user input such as "1,68,000", "₹ 2500" or "3008". Returns null if not a positive whole amount. */
 fun parseAmount(input: String): Long? {
-    val cleaned = input.replace("₹", "").replace(",", "").trim()
+    val symbol = Plan.profile.currencySymbol
+    val cleaned = input.let { if (symbol.isNotBlank()) it.replace(symbol, "") else it }.replace("₹", "").replace(",", "").trim()
     if (cleaned.isEmpty()) return null
     val value = cleaned.toBigDecimalOrNull() ?: return null
     if (value.signum() <= 0) return null

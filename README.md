@@ -18,7 +18,8 @@ CI (`.github/workflows/build-apk.yml`) runs tests, builds, lints and uploads the
 - **First-run setup**: a new install asks for the salary account, spending account, salary day (1–28), salary and
   spending budget, or restores a backup. Installs that already hold data keep the original setup (HDFC / Jupiter,
   salary on the 25th) without being asked. Account names, the extra savings pod and the loan can be changed later
-  in Settings → Accounts & loan.
+  in Settings → Accounts & loan, along with the currency symbol and Indian (1,00,000) or international (100,000)
+  number grouping.
 
 - **Uneven income**: a different salary for a single cycle, dated extra income (bonus, refund) that tops up that
   cycle's emergency pod, and an option to move salary day to the Friday before when it falls on a weekend.

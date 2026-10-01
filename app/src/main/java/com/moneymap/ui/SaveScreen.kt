@@ -251,7 +251,7 @@ private fun GoalDialog(existing: Goal?, pods: List<String>, onDismiss: () -> Uni
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(name, { name = it }, label = { Text("Goal") }, singleLine = true,
                     isError = showErrors && name.isBlank(), modifier = Modifier.fillMaxWidth())
-                AmountField(target, { target = it }, label = "Target (₹)", isError = showErrors && parsed == null)
+                AmountField(target, { target = it }, label = "Target", isError = showErrors && parsed == null)
                 DateField("By", date, { date = it }, clearable = true)
                 Text("Saved in", style = MaterialTheme.typography.titleSmall)
                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {

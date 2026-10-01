@@ -8,7 +8,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.Row
 import androidx.compose.material3.Button
+import androidx.compose.material3.Switch
+import androidx.compose.ui.Alignment
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -43,6 +46,8 @@ fun SetupScreen(
     var dayText by rememberSaveable { mutableStateOf(start.salaryDay.toString()) }
     var salaryText by rememberSaveable { mutableStateOf("") }
     var budgetText by rememberSaveable { mutableStateOf("") }
+    var currency by rememberSaveable { mutableStateOf(start.currencySymbol) }
+    var indian by rememberSaveable { mutableStateOf(start.indianGrouping) }
 
     val day = dayText.toIntOrNull()?.takeIf { it in 1..28 }
     val salary = parseAmount(salaryText)
@@ -70,6 +75,12 @@ fun SetupScreen(
                 supportingText = { Text("Each cycle runs from this day to the day before it next month.") },
                 singleLine = true, isError = day == null,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(currency, { currency = it.take(4) }, label = { Text("Currency symbol") },
+                singleLine = true, modifier = Modifier.fillMaxWidth())
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Indian grouping (1,00,000)", Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                Switch(checked = indian, onCheckedChange = { indian = it })
+            }
             AmountField(salaryText, { salaryText = it }, label = "Monthly salary", isError = salaryText.isNotEmpty() && salary == null)
             AmountField(budgetText, { budgetText = it }, label = "Monthly spending budget",
                 isError = budgetText.isNotEmpty() && (budget == null || (salary != null && budget > salary)))
@@ -79,7 +90,8 @@ fun SetupScreen(
                 enabled = valid,
                 onClick = {
                     onDone(
-                        start.copy(salaryDay = day!!, salaryAccount = salaryAccount.trim(), spendAccount = spendAccount.trim()),
+                        start.copy(salaryDay = day!!, salaryAccount = salaryAccount.trim(), spendAccount = spendAccount.trim(),
+                            currencySymbol = currency.trim(), indianGrouping = indian),
                         salary!!, budget!!,
                     )
                 },

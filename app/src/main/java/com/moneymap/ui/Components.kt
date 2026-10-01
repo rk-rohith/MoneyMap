@@ -47,7 +47,7 @@ fun SectionTitle(text: String, modifier: Modifier = Modifier) {
 fun AmountField(
     value: String,
     onValueChange: (String) -> Unit,
-    label: String = "Amount (₹)",
+    label: String = "Amount",
     modifier: Modifier = Modifier,
     isError: Boolean = false,
 ) {
@@ -57,7 +57,7 @@ fun AmountField(
         label = { Text(label) },
         singleLine = true,
         isError = isError,
-        prefix = { Text("₹") },
+        prefix = { Text(com.moneymap.core.Plan.CURRENCY) },
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
         modifier = modifier.fillMaxWidth(),
     )

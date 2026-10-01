@@ -23,6 +23,9 @@ data class Profile(
     val setupDone: Boolean = true,
     /** When the salary day falls on a Saturday or Sunday, salary arrives on the Friday before. */
     val weekendSalaryEarly: Boolean = false,
+    val currencySymbol: String = "₹",
+    /** 1,00,000 (Indian lakh/crore grouping) or 100,000. */
+    val indianGrouping: Boolean = true,
 ) {
     init {
         require(salaryDay in 1..28) { "Salary day must be between 1 and 28" }
@@ -55,6 +58,7 @@ object Plan {
     /** Spending account that holds the pods. */
     val JUPITER: String get() = profile.spendAccount
     val SPEND_MAIN: String get() = "${profile.spendAccount} main"
+    val CURRENCY: String get() = profile.currencySymbol
 
     const val EMERGENCY_POD = "Emergency pod"
     const val DEBT_POD = "Debt pod"

@@ -210,11 +210,14 @@ private fun ProfileCard(profile: Profile, onSave: (Profile) -> Unit) {
     var goalPod by remember(profile) { mutableStateOf(profile.goalPod) }
     var lender by remember(profile) { mutableStateOf(profile.lenderName) }
     var weekendEarly by remember(profile) { mutableStateOf(profile.weekendSalaryEarly) }
+    var currency by remember(profile) { mutableStateOf(profile.currencySymbol) }
+    var indian by remember(profile) { mutableStateOf(profile.indianGrouping) }
     var loanText by remember(profile) { mutableStateOf(if (profile.loanTotal > 0) formatInr(profile.loanTotal, withSymbol = false) else "") }
     val loan = if (loanText.isBlank()) 0L else parseAmount(loanText)
     val edited = profile.copy(
         salaryAccount = salaryAccount.trim(), spendAccount = spendAccount.trim(), goalPod = goalPod.trim(),
         lenderName = lender.trim(), loanTotal = loan ?: profile.loanTotal, weekendSalaryEarly = weekendEarly,
+        currencySymbol = currency.trim(), indianGrouping = indian,
     )
     val valid = loan != null && listOf(salaryAccount, spendAccount, goalPod, lender).all { it.isNotBlank() }
     OutlinedCard(Modifier.fillMaxWidth()) {
@@ -236,8 +239,16 @@ private fun ProfileCard(profile: Profile, onSave: (Profile) -> Unit) {
             OutlinedTextField(lender, { lender = it }, label = { Text("Lender for loan instalments") },
                 singleLine = true, isError = lender.isBlank(), modifier = Modifier.fillMaxWidth())
             OutlinedTextField(loanText, { v -> loanText = v.filter { it.isDigit() || it == ',' } },
-                label = { Text("Loan total (₹, blank for none)") }, singleLine = true, isError = loan == null,
+                label = { Text("Loan total (${Plan.CURRENCY}, blank for none)") }, singleLine = true, isError = loan == null,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(currency, { currency = it.take(4) }, label = { Text("Currency symbol") },
+                singleLine = true, modifier = Modifier.fillMaxWidth())
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Indian grouping (" + formatInr(150_000, symbol = currency.trim(), indian = true) + " instead of " +
+                    formatInr(150_000, symbol = currency.trim(), indian = false) + ")",
+                    Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                Switch(checked = indian, onCheckedChange = { indian = it })
+            }
             Button(enabled = valid && edited != profile, onClick = { onSave(edited) }) { Text("Save") }
         }
     }
@@ -368,13 +379,13 @@ private fun PlanEditor(today: LocalDate, plan: PlanEngine, onSave: (PlanSettings
                 }
             }
             OutlinedTextField(salaryText, { v -> salaryText = v.filter { it.isDigit() || it == ',' } },
-                label = { Text("Salary (₹, on day ${Plan.SALARY_DAY})") }, singleLine = true, isError = salary == null,
+                label = { Text("Salary (${Plan.CURRENCY}, on day ${Plan.SALARY_DAY})") }, singleLine = true, isError = salary == null,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth())
             OutlinedTextField(budgetText, { v -> budgetText = v.filter { it.isDigit() || it == ',' } },
-                label = { Text("Monthly spending budget (₹, ${Plan.SPEND_MAIN})") }, singleLine = true, isError = budget == null,
+                label = { Text("Monthly spending budget (${Plan.CURRENCY}, ${Plan.SPEND_MAIN})") }, singleLine = true, isError = budget == null,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth())
             OutlinedTextField(overrideText, { v -> overrideText = v.filter { it.isDigit() || it == ',' } },
-                label = { Text("Salary for ${from.monthYear()} cycle only (₹)") },
+                label = { Text("Salary for ${from.monthYear()} cycle only (${Plan.CURRENCY})") },
                 supportingText = { Text("Leave blank to use the plan. For a bonus month, a raise not yet in the plan, or unpaid leave.") },
                 singleLine = true, isError = !overrideValid,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth())

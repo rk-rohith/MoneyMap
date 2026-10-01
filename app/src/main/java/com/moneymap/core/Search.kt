@@ -11,7 +11,8 @@ object Search {
 
     private fun termMatches(term: String, fields: List<String?>, amounts: List<Long>): Boolean {
         if (fields.any { it?.lowercase()?.contains(term) == true }) return true
-        val digits = term.replace("₹", "").replace(",", "")
+        val symbol = Plan.profile.currencySymbol.lowercase()
+        val digits = term.let { if (symbol.isNotBlank()) it.replace(symbol, "") else it }.replace("₹", "").replace(",", "")
         val n = digits.toLongOrNull() ?: return false
         return amounts.any { it == n || it.toString().startsWith(digits) }
     }

@@ -107,3 +107,22 @@ class VariableIncomeTest {
         assertEquals(start, DefaultPlan.engine.items(start).first { it.id == "2026-10-25:salary-day" }.date)
     }
 }
+
+class CurrencyTest {
+    @After
+    fun restore() {
+        Plan.profile = Profile()
+    }
+
+    @Test
+    fun indianByDefaultInternationalOnRequest() {
+        assertEquals("₹12,34,567", formatInr(1_234_567))
+        Plan.profile = Profile(currencySymbol = "$", indianGrouping = false)
+        assertEquals("$1,234,567", formatInr(1_234_567))
+        assertEquals("-$999", formatInr(-999))
+        assertEquals("1,000", formatInr(1_000, withSymbol = false))
+        assertEquals(2_500L, parseAmount("$ 2,500"))
+        assertEquals(2_500L, parseAmount("₹2500"))
+        assertTrue(Search.matches("$1,500", listOf("x"), listOf(1_500)))
+    }
+}

@@ -17,6 +17,8 @@ object ProfileJson {
         put("goalPod", p.goalPod)
         put("setupDone", p.setupDone)
         put("weekendSalaryEarly", p.weekendSalaryEarly)
+        put("currencySymbol", p.currencySymbol)
+        put("indianGrouping", p.indianGrouping)
     }.toString()
 
     /** Missing values fall back to the original setup's defaults; unreadable text gives null. */
@@ -34,6 +36,8 @@ object ProfileJson {
                 goalPod = o.optString("goalPod", d.goalPod).ifBlank { d.goalPod },
                 setupDone = o.optBoolean("setupDone", true),
                 weekendSalaryEarly = o.optBoolean("weekendSalaryEarly", false),
+                currencySymbol = o.optString("currencySymbol", d.currencySymbol).take(4),
+                indianGrouping = o.optBoolean("indianGrouping", d.indianGrouping),
             )
         }.getOrNull()
     }
