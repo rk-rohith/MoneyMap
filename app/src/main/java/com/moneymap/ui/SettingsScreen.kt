@@ -53,6 +53,7 @@ import com.moneymap.core.OneOff
 import com.moneymap.core.Plan
 import com.moneymap.core.PlanEngine
 import com.moneymap.core.PlanSettings
+import com.moneymap.core.Profile
 import com.moneymap.core.RecurringItem
 import com.moneymap.core.ReminderPrefs
 import com.moneymap.core.formatInr
@@ -91,6 +92,8 @@ fun SettingsScreen(
     dynamicColor: Boolean = false,
     onDynamicColorChange: (Boolean) -> Unit = {},
     onBackupPassword: (String?) -> Unit = {},
+    profile: Profile = Plan.profile,
+    onSaveProfile: (Profile) -> Unit = {},
 ) {
     Scaffold(
         topBar = {
@@ -108,6 +111,8 @@ fun SettingsScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             PlanEditor(today, plan, onSavePlan)
+
+            ProfileCard(profile, onSaveProfile)
 
             ReminderSettings(reminderPrefs, onSaveReminders)
 
@@ -184,6 +189,40 @@ fun SettingsScreen(
                     OutlinedButton(onClick = onTestNotification) { Text("Send test notification") }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun ProfileCard(profile: Profile, onSave: (Profile) -> Unit) {
+    var salaryAccount by remember(profile) { mutableStateOf(profile.salaryAccount) }
+    var spendAccount by remember(profile) { mutableStateOf(profile.spendAccount) }
+    var goalPod by remember(profile) { mutableStateOf(profile.goalPod) }
+    var lender by remember(profile) { mutableStateOf(profile.lenderName) }
+    var loanText by remember(profile) { mutableStateOf(if (profile.loanTotal > 0) formatInr(profile.loanTotal, withSymbol = false) else "") }
+    val loan = if (loanText.isBlank()) 0L else parseAmount(loanText)
+    val edited = profile.copy(
+        salaryAccount = salaryAccount.trim(), spendAccount = spendAccount.trim(), goalPod = goalPod.trim(),
+        lenderName = lender.trim(), loanTotal = loan ?: profile.loanTotal,
+    )
+    val valid = loan != null && listOf(salaryAccount, spendAccount, goalPod, lender).all { it.isNotBlank() }
+    OutlinedCard(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Accounts & loan", style = MaterialTheme.typography.titleMedium)
+            Text("Salary day: ${profile.salaryDay} (set when the app was first set up; changing it would move every " +
+                "past cycle).", style = MaterialTheme.typography.bodySmall)
+            OutlinedTextField(salaryAccount, { salaryAccount = it }, label = { Text("Salary account (bills paid from)") },
+                singleLine = true, isError = salaryAccount.isBlank(), modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(spendAccount, { spendAccount = it }, label = { Text("Spending account (holds the pods)") },
+                singleLine = true, isError = spendAccount.isBlank(), modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(goalPod, { goalPod = it }, label = { Text("Extra savings pod for returns") },
+                singleLine = true, isError = goalPod.isBlank(), modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(lender, { lender = it }, label = { Text("Lender for loan instalments") },
+                singleLine = true, isError = lender.isBlank(), modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(loanText, { v -> loanText = v.filter { it.isDigit() || it == ',' } },
+                label = { Text("Loan total (₹, blank for none)") }, singleLine = true, isError = loan == null,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth())
+            Button(enabled = valid && edited != profile, onClick = { onSave(edited) }) { Text("Save") }
         }
     }
 }
@@ -277,10 +316,10 @@ private fun PlanEditor(today: LocalDate, plan: PlanEngine, onSave: (PlanSettings
                 }
             }
             OutlinedTextField(salaryText, { v -> salaryText = v.filter { it.isDigit() || it == ',' } },
-                label = { Text("Salary (₹, on the 25th)") }, singleLine = true, isError = salary == null,
+                label = { Text("Salary (₹, on day ${Plan.SALARY_DAY})") }, singleLine = true, isError = salary == null,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth())
             OutlinedTextField(budgetText, { v -> budgetText = v.filter { it.isDigit() || it == ',' } },
-                label = { Text("Monthly spending budget (₹, Jupiter main)") }, singleLine = true, isError = budget == null,
+                label = { Text("Monthly spending budget (₹, ${Plan.SPEND_MAIN})") }, singleLine = true, isError = budget == null,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth())
 
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -316,7 +355,8 @@ private fun PlanEditor(today: LocalDate, plan: PlanEngine, onSave: (PlanSettings
                     IconButton(onClick = { debt = debt - d }) { Icon(Icons.Filled.Delete, contentDescription = "Remove") }
                 }
             }
-            Text("Total ${formatInr(debt.sumOf { it.amount })} of ${formatInr(Plan.LOAN_TOTAL)}",
+            Text("Total ${formatInr(debt.sumOf { it.amount })}" +
+                if (Plan.LOAN_TOTAL > 0) " of ${formatInr(Plan.LOAN_TOTAL)}" else "",
                 style = MaterialTheme.typography.bodySmall)
 
             HorizontalDivider()
@@ -421,7 +461,7 @@ private fun itemSubtitle(i: RecurringItem): String = buildString {
     append(" · ")
     append(when (i.flow) {
         Flow.INCOME -> "Income into ${i.account}"
-        Flow.HDFC -> if (i.autopay) "HDFC autopay" else "Paid from HDFC"
+        Flow.HDFC -> if (i.autopay) "${Plan.HDFC} autopay" else "Paid from ${Plan.HDFC}"
         Flow.POD -> "From ${i.pod.ifBlank { "pod" }}" + if (i.autopay) " · autopay" else ""
     })
     i.startDate?.let { append(" · from ${it.short()} ${it.year}") }
@@ -478,7 +518,7 @@ private fun ItemDialog(
                         isError = showErrors && pod.isBlank(), modifier = Modifier.fillMaxWidth())
                 }
                 OutlinedTextField(account, { account = it },
-                    label = { Text(if (flow == Flow.INCOME) "Arrives in (e.g. HDFC)" else "Account (e.g. HDFC, Jupiter)") },
+                    label = { Text(if (flow == Flow.INCOME) "Arrives in (e.g. ${Plan.HDFC})" else "Account (e.g. ${Plan.HDFC}, ${Plan.JUPITER})") },
                     singleLine = true, modifier = Modifier.fillMaxWidth())
                 DateField("Starts", start, { start = it }, clearable = true)
                 DateField("Ends", end, { end = it }, clearable = true)

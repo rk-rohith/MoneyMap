@@ -15,6 +15,11 @@ CI (`.github/workflows/build-apk.yml`) runs tests, builds, lints and uploads the
 
 ## Features
 
+- **First-run setup**: a new install asks for the salary account, spending account, salary day (1–28), salary and
+  spending budget, or restores a backup. Installs that already hold data keep the original setup (HDFC / Jupiter,
+  salary on the 25th) without being asked. Account names, the extra savings pod and the loan can be changed later
+  in Settings → Accounts & loan.
+
 - **Month**: overdue alerts, next-up card, cycle navigation, salary split, payment checklist with undo.
 - **Spend**: log expenses by category, see where the budget went, browse past cycles, "paid for someone" → People.
 - **People**: money lent and borrowed, partial returns, reminders on due dates.

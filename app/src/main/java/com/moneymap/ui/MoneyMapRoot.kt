@@ -73,6 +73,7 @@ fun MoneyMapRoot(vm: MainViewModel, onLockChanged: (Boolean) -> Boolean = { true
     val reminderPrefs by vm.reminderPrefs.collectAsStateWithLifecycle()
     val lockEnabled by vm.lockEnabled.collectAsStateWithLifecycle()
     val passwordPrompt by vm.passwordPrompt.collectAsStateWithLifecycle()
+    val profile by vm.profile.collectAsStateWithLifecycle()
 
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var detailId by rememberSaveable { mutableStateOf<Long?>(null) }
@@ -146,6 +147,18 @@ fun MoneyMapRoot(vm: MainViewModel, onLockChanged: (Boolean) -> Boolean = { true
         )
     }
 
+    // Wait for the profile, then run first-time setup before anything else.
+    val currentProfile = profile ?: return
+    if (!currentProfile.setupDone) {
+        SetupScreen(
+            start = currentProfile,
+            snackbar = snackbar,
+            onDone = { p, salary, budget -> vm.completeSetup(p, salary, budget) },
+            onRestore = { importLauncher.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) },
+        )
+        return
+    }
+
     LaunchedEffect(addEntryRequest) {
         if (addEntryRequest) {
             settingsOpen = false
@@ -191,6 +204,8 @@ fun MoneyMapRoot(vm: MainViewModel, onLockChanged: (Boolean) -> Boolean = { true
             dynamicColor = dynamicColor,
             onDynamicColorChange = { vm.setDynamicColor(it) },
             onBackupPassword = { vm.setBackupPassword(it) },
+            profile = currentProfile,
+            onSaveProfile = { vm.saveProfile(it) },
         )
         ImportConfirm(confirmImport, onDismiss = { confirmImport = false }) {
             importLauncher.launch(arrayOf("application/json", "text/plain", "application/octet-stream"))

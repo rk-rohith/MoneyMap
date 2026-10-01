@@ -14,6 +14,7 @@ import com.moneymap.core.LedgerEntry
 import com.moneymap.core.PlanEngine
 import com.moneymap.core.PlanSettings
 import com.moneymap.core.PodMove
+import com.moneymap.core.Profile
 import com.moneymap.core.ReminderPrefs
 import com.moneymap.core.ReturnPod
 import com.moneymap.core.formatInr
@@ -58,6 +59,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         repo.goals.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
     val plan: StateFlow<PlanEngine> =
         repo.plan.stateIn(viewModelScope, SharingStarted.Eagerly, DefaultPlan.engine)
+    /** Null while loading; [Profile.setupDone] false shows the first-run setup. */
+    val profile: StateFlow<Profile?> =
+        repo.profile.stateIn(viewModelScope, SharingStarted.Eagerly, null)
     val reminderPrefs: StateFlow<ReminderPrefs> =
         repo.reminderPrefs.stateIn(viewModelScope, SharingStarted.Eagerly, ReminderPrefs())
 
@@ -234,6 +238,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun dismissPasswordPrompt() { _passwordPrompt.value = null }
+
+    fun completeSetup(profile: Profile, salary: Long, spendBudget: Long) = viewModelScope.launch {
+        repo.completeSetup(profile, salary, spendBudget)
+        say("You're set. Add bills and savings in Settings & plan.")
+    }
+
+    fun saveProfile(profile: Profile) = viewModelScope.launch {
+        repo.saveProfile(profile)
+        say("Profile saved")
+    }
 
     fun setBackupPassword(password: String?) {
         runCatching { BackupPassword.set(getApplication(), password) }

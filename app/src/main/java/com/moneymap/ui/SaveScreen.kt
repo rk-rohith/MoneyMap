@@ -90,7 +90,7 @@ fun SaveScreen(
         }
         if (goals.isEmpty()) {
             item {
-                Text("Set a target on a pod, e.g. the Sri Lanka trip or an emergency fund, and see how much to save each cycle.",
+                Text("Set a target on a pod, e.g. a trip or an emergency fund, and see how much to save each cycle.",
                     style = MaterialTheme.typography.bodyMedium)
             }
         }
@@ -101,7 +101,7 @@ fun SaveScreen(
             Text("Pods", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(top = 8.dp))
             Text(
                 "Ticking the salary-day routine fills the pods with that cycle's split. Ticking a debt instalment or a " +
-                    "pod → Jupiter move takes the money out. Returns from people go into their return pod.",
+                    "pod → ${Plan.SPEND_MAIN} move takes the money out. Returns from people go into their return pod.",
                 style = MaterialTheme.typography.bodySmall,
             )
         }

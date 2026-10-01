@@ -78,6 +78,7 @@ object Backup {
         })
         data.plan?.let { root.put("plan", JSONObject(it)) }
         data.reminders?.let { root.put("reminders", JSONObject(it)) }
+        data.profile?.let { root.put("profile", JSONObject(it)) }
         return root.toString(2)
     }
 
@@ -124,7 +125,8 @@ object Backup {
         // Validate the plan before accepting it; older backups have none and keep the current plan.
         val plan = root.optJSONObject("plan")?.let { PlanJson.encode(PlanJson.fromJson(it)) }
         val reminders = root.optJSONObject("reminders")?.let { ReminderPrefsJson.encode(ReminderPrefsJson.decode(it.toString())) }
-        return BackupData(entries, txns, expenses, done, podMoves, goals, plan, reminders)
+        val profile = root.optJSONObject("profile")?.let { ProfileJson.decode(it.toString())?.let(ProfileJson::encode) }
+        return BackupData(entries, txns, expenses, done, podMoves, goals, plan, reminders, profile)
     }
 
     private fun JSONArray.objects(): List<JSONObject> = (0 until length()).map { getJSONObject(it) }

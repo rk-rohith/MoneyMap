@@ -192,12 +192,12 @@ private fun SalarySplitCard(b: com.moneymap.core.CycleBudget, expanded: Boolean,
             }
             AnimatedVisibility(expanded) {
                 Column(Modifier.padding(top = 8.dp)) {
-                    SplitRow("Salary (HDFC)", b.salary)
+                    SplitRow("Salary (${Plan.HDFC})", b.salary)
                     b.otherIncome.forEach { SplitRow(it.label, it.amount) }
                     SplitRow("Total in", b.income, bold = true)
                     HorizontalDivider(Modifier.padding(vertical = 6.dp))
-                    b.salaryDayPayments.forEach { SplitRow("${it.label} (HDFC, salary day)", -it.amount) }
-                    SplitRow("Keep in HDFC for bills", -b.hdfcHold)
+                    b.salaryDayPayments.forEach { SplitRow("${it.label} (${Plan.HDFC}, salary day)", -it.amount) }
+                    SplitRow("Keep in ${Plan.HDFC} for bills", -b.hdfcHold)
                     if (b.hdfcBills.isNotEmpty()) {
                         Text(
                             b.hdfcBills.joinToString(" · ") { "${it.label} ${formatInr(it.amount)}" },
@@ -205,11 +205,11 @@ private fun SalarySplitCard(b: com.moneymap.core.CycleBudget, expanded: Boolean,
                             modifier = Modifier.padding(start = 12.dp),
                         )
                     }
-                    SplitRow("Send to Jupiter", b.transferToJupiter, bold = true)
+                    SplitRow("Send to ${Plan.JUPITER}", b.transferToJupiter, bold = true)
                     HorizontalDivider(Modifier.padding(vertical = 6.dp))
                     if (b.debtPod > 0) SplitRow("Debt pod", b.debtPod)
                     b.pods.groupBy { it.label }.forEach { (name, lines) -> SplitRow(name, lines.sumOf { it.amount }) }
-                    SplitRow("Jupiter main (spending)", b.jupiterMain)
+                    SplitRow("${Plan.SPEND_MAIN} (spending)", b.jupiterMain)
                     SplitRow("Emergency pod", b.emergencyPod, bold = true)
                 }
             }

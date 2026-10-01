@@ -2,20 +2,57 @@ package com.moneymap.core
 
 import java.time.LocalDate
 
-/** Cycle rules and fixed facts that don't change when the plan is edited. */
-object Plan {
-    /** Salary day. A cycle runs from the 25th to the 24th of the next month. */
-    const val SALARY_DAY = 25
-    const val REVIEW_DAY = 24
+/**
+ * Who the plan belongs to: salary day, account names and the tracked loan. Existing installs keep these defaults
+ * (the original setup); a new install picks its own values on the setup screen.
+ */
+data class Profile(
+    /** Day of the month the salary arrives, 1–28. A cycle runs from this day to the day before it next month. */
+    val salaryDay: Int = 25,
+    /** Where salary lands and bills are paid from. */
+    val salaryAccount: String = "HDFC",
+    /** Where spending money and savings pods live. */
+    val spendAccount: String = "Jupiter",
+    /** Nothing dated before this is ever treated as overdue. */
+    val trackStart: LocalDate = LocalDate.of(2026, 9, 27),
+    val lenderName: String = "Lender",
+    val loanTotal: Long = 200_000,
+    /** Name of the extra savings pod people's returns can go to. */
+    val goalPod: String = "Sri Lanka pod",
+    /** False until the first-run setup is finished. */
+    val setupDone: Boolean = true,
+) {
+    init {
+        require(salaryDay in 1..28) { "Salary day must be between 1 and 28" }
+    }
 
-    const val LOAN_TOTAL = 200_000L
-    const val LENDER_NAME = "Lender"
+    companion object {
+        /** Starting point for a brand-new install, before the setup screen fills it in. */
+        fun fresh(today: LocalDate) = Profile(
+            salaryAccount = "Bank", spendAccount = "Spending", trackStart = today, lenderName = "Lender",
+            loanTotal = 0, goalPod = "Goal pod", setupDone = false,
+        )
+    }
+}
+
+/** Cycle rules. They read the active [profile], which the app loads at start-up. */
+object Plan {
+    @Volatile
+    var profile: Profile = Profile()
+
+    val SALARY_DAY: Int get() = profile.salaryDay
+
+    val LOAN_TOTAL: Long get() = profile.loanTotal
+    val LENDER_NAME: String get() = profile.lenderName
 
     /** Nothing dated before this is ever treated as overdue. */
-    val TRACK_START: LocalDate = LocalDate.of(2026, 9, 27)
+    val TRACK_START: LocalDate get() = profile.trackStart
 
-    const val HDFC = "HDFC"
-    const val JUPITER = "Jupiter"
+    /** Salary account (bills are paid from here). The name is kept from the original HDFC setup. */
+    val HDFC: String get() = profile.salaryAccount
+    /** Spending account that holds the pods. */
+    val JUPITER: String get() = profile.spendAccount
+    val SPEND_MAIN: String get() = "${profile.spendAccount} main"
 
     const val EMERGENCY_POD = "Emergency pod"
     const val DEBT_POD = "Debt pod"
@@ -24,7 +61,8 @@ object Plan {
         if (date.dayOfMonth >= SALARY_DAY) date.withDayOfMonth(SALARY_DAY)
         else date.minusMonths(1).withDayOfMonth(SALARY_DAY)
 
-    fun cycleEnd(cycleStart: LocalDate): LocalDate = cycleStart.plusMonths(1).withDayOfMonth(REVIEW_DAY)
+    /** Last day of the cycle: the day before the next salary day. */
+    fun cycleEnd(cycleStart: LocalDate): LocalDate = cycleStart.plusMonths(1).minusDays(1)
 
     fun cycleLabel(cycleStart: LocalDate): String = "${cycleStart.monthYear()} cycle"
 
@@ -37,13 +75,21 @@ object Plan {
     fun isDebtItem(id: String): Boolean = Regex(":debt\\d*$").containsMatchIn(id)
 }
 
-enum class Flow(val label: String) {
-    INCOME("Income"),
-    HDFC("Paid from HDFC"),
-    POD("Paid from a Jupiter pod"),
+/** Names are stored in plan JSON, so HDFC/POD stay as they were; labels follow the profile's account names. */
+enum class Flow {
+    INCOME,
+    HDFC,
+    POD;
+
+    val label: String
+        get() = when (this) {
+            INCOME -> "Income"
+            HDFC -> "Paid from ${Plan.HDFC}"
+            POD -> "Paid from a ${Plan.JUPITER} pod"
+        }
 }
 
-/** A fixed monthly item: income, a bill/autopay from HDFC, or a payment funded by a Jupiter pod. */
+/** A fixed monthly item: income, a bill/autopay from the salary account, or a payment funded by a pod. */
 data class RecurringItem(
     val id: String,
     val title: String,
@@ -280,17 +326,17 @@ class PlanEngine(val settings: PlanSettings) {
         val out = mutableListOf<PlanItem>()
 
         out += PlanItem(id(sd, "salary"), sd, "Salary credited", cfg.salary, Plan.HDFC, ItemKind.INCOME,
-            detail = "Salary arrives in HDFC")
+            detail = "Salary arrives in ${Plan.HDFC}")
         out += PlanItem(
             id(sd, "salary-day"), sd, "Salary-day routine", b.transferToJupiter, "${Plan.HDFC} → ${Plan.JUPITER}",
             ItemKind.SALARY_DAY,
-            detail = "Send ${formatInr(b.transferToJupiter)} to Jupiter and split into pods",
+            detail = "Send ${formatInr(b.transferToJupiter)} to ${Plan.JUPITER} and split into pods",
             steps = buildList {
-                b.salaryDayPayments.forEach { add("Pay ${it.label.lowercaseFirst()} ${formatInr(it.amount)} from HDFC") }
-                add("Send ${formatInr(b.transferToJupiter)} to Jupiter")
+                b.salaryDayPayments.forEach { add("Pay ${it.label.lowercaseFirst()} ${formatInr(it.amount)} from ${Plan.HDFC}") }
+                add("Send ${formatInr(b.transferToJupiter)} to ${Plan.JUPITER}")
                 b.podCredits.forEach { add("${it.label}: ${formatInr(it.amount)}") }
-                add("Keep ${formatInr(b.jupiterMain)} in Jupiter main for spending")
-                add("Leave ${formatInr(b.hdfcHold)} in HDFC for bills")
+                add("Keep ${formatInr(b.jupiterMain)} in ${Plan.SPEND_MAIN} for spending")
+                add("Leave ${formatInr(b.hdfcHold)} in ${Plan.HDFC} for bills")
             },
         )
 
@@ -301,16 +347,16 @@ class PlanEngine(val settings: PlanSettings) {
                 Flow.HDFC -> out += PlanItem(id(date, item.id), date, item.title, item.amount, item.account,
                     if (item.autopay) ItemKind.AUTOPAY else ItemKind.BILL,
                     detail = when {
-                        date == cycleStart -> "Pay from HDFC on salary day"
+                        date == cycleStart -> "Pay from ${Plan.HDFC} on salary day"
                         item.endDate != null && Plan.occurrence(cycleStart.plusMonths(1), item.day).isAfter(item.endDate) ->
                             "Last payment"
-                        item.autopay -> "HDFC autopay"
-                        else -> "Pay from HDFC"
+                        item.autopay -> "${Plan.HDFC} autopay"
+                        else -> "Pay from ${Plan.HDFC}"
                     })
                 Flow.POD -> {
                     val pod = item.pod.ifBlank { "${item.title} pod" }
-                    out += PlanItem(id(date, "move-${item.id}"), date, "Move ${pod} money to Jupiter main", item.amount,
-                        Plan.JUPITER, ItemKind.TRANSFER, detail = "$pod → Jupiter main before the payment", pod = pod)
+                    out += PlanItem(id(date, "move-${item.id}"), date, "Move $pod money to ${Plan.SPEND_MAIN}", item.amount,
+                        Plan.JUPITER, ItemKind.TRANSFER, detail = "$pod → ${Plan.SPEND_MAIN} before the payment", pod = pod)
                     out += PlanItem(id(date, item.id), date, item.title, item.amount, item.account,
                         if (item.autopay) ItemKind.AUTOPAY else ItemKind.BILL,
                         detail = if (item.autopay) "${item.account} autopay" else "Pay from ${item.account}")
@@ -320,8 +366,8 @@ class PlanEngine(val settings: PlanSettings) {
 
         val end = Plan.cycleEnd(cycleStart)
         settings.oneOffs.filter { !it.date.isBefore(cycleStart) && !it.date.isAfter(end) && it.amount > 0 }.forEach { o ->
-            out += PlanItem(id(o.date, "move-oneoff-${o.id}"), o.date, "Move ${o.pod} money to Jupiter main", o.amount,
-                Plan.JUPITER, ItemKind.TRANSFER, detail = "${o.pod} → Jupiter main before paying", pod = o.pod)
+            out += PlanItem(id(o.date, "move-oneoff-${o.id}"), o.date, "Move ${o.pod} money to ${Plan.SPEND_MAIN}", o.amount,
+                Plan.JUPITER, ItemKind.TRANSFER, detail = "${o.pod} → ${Plan.SPEND_MAIN} before paying", pod = o.pod)
             out += PlanItem(id(o.date, "oneoff-${o.id}"), o.date, o.title, o.amount, Plan.JUPITER, ItemKind.BILL,
                 detail = if (o.fundingCycles().size > 1) "Planned one-off · saved over ${o.fundingCycles().size} cycles"
                 else "Planned one-off")
@@ -329,7 +375,8 @@ class PlanEngine(val settings: PlanSettings) {
 
         debtFor(cycleStart).forEachIndexed { i, d ->
             out += PlanItem(id(d.date, if (i == 0) "debt" else "debt$i"), d.date, "Repay ${Plan.LENDER_NAME}", d.amount,
-                Plan.DEBT_POD, ItemKind.DEBT, detail = "Instalment on the ₹2,00,000 personal loan", pod = Plan.DEBT_POD)
+                Plan.DEBT_POD, ItemKind.DEBT, detail = if (Plan.LOAN_TOTAL > 0) "Instalment on the ${formatInr(Plan.LOAN_TOTAL)} loan" else "Loan instalment",
+                pod = Plan.DEBT_POD)
         }
 
         val reviewDate = Plan.cycleEnd(cycleStart)

@@ -12,6 +12,7 @@ import com.moneymap.core.Plan
 import com.moneymap.core.PlanEngine
 import com.moneymap.core.PlanSettings
 import com.moneymap.core.PodMove
+import com.moneymap.core.Profile
 import com.moneymap.core.ReminderPrefs
 import com.moneymap.core.Pods
 import com.moneymap.core.ReturnPod
@@ -39,15 +40,64 @@ class MoneyRepository(
     val reminderPrefs: Flow<ReminderPrefs> =
         dao.observeSetting(ReminderPrefsJson.SETTING_KEY).map { ReminderPrefsJson.decode(it) }
 
+    /** Null until [init] has stored one; the UI waits for it. Every emission also updates [Plan.profile]. */
+    val profile: Flow<Profile?> = dao.observeSetting(ProfileJson.SETTING_KEY).map { text ->
+        ProfileJson.decode(text)?.also { Plan.profile = it }
+    }
+
     private fun decodePlan(text: String?): PlanSettings =
         text?.let { runCatching { PlanJson.decode(it) }.getOrNull() } ?: DefaultPlan.settings
 
-    suspend fun init() {
-        if (ledger.seedIfEmpty()) onChanged()
+    /**
+     * Loads the profile into [Plan.profile], creating it on first run: installs that already hold data keep the
+     * original setup; a brand-new install starts empty and shows the setup screen. Nothing personal is seeded.
+     */
+    suspend fun profileNow(): Profile {
+        ProfileJson.decode(dao.setting(ProfileJson.SETTING_KEY))?.let {
+            Plan.profile = it
+            return it
+        }
+        val existing = dao.entryCount() > 0 || dao.setting(PlanJson.SETTING_KEY) != null || dao.done().isNotEmpty() ||
+            dao.expenses().isNotEmpty()
+        val p = if (existing) Profile() else Profile.fresh(LocalDate.now())
+        dao.putSetting(SettingEntity(ProfileJson.SETTING_KEY, ProfileJson.encode(p)))
+        Plan.profile = p
+        return p
     }
 
-    // Snapshots used by notifications and background work.
-    suspend fun planNow(): PlanEngine = PlanEngine(decodePlan(dao.setting(PlanJson.SETTING_KEY)))
+    suspend fun init() {
+        profileNow()
+        onChanged()
+    }
+
+    /** Finishes first-run setup: saves the profile and a starting plan. */
+    suspend fun completeSetup(profile: Profile, salary: Long, spendBudget: Long) {
+        val p = profile.copy(setupDone = true)
+        Plan.profile = p
+        val start = Plan.cycleStartFor(LocalDate.now())
+        val settings = PlanSettings(
+            listOf(com.moneymap.core.PlanVersion(start, com.moneymap.core.PlanConfig(salary, spendBudget, emptyList()))),
+            debt = emptyList(),
+        )
+        db.withTransaction {
+            dao.putSetting(SettingEntity(PlanJson.SETTING_KEY, PlanJson.encode(settings)))
+            dao.putSetting(SettingEntity(ProfileJson.SETTING_KEY, ProfileJson.encode(p)))
+        }
+        onChanged()
+    }
+
+    /** Saves profile edits made in Settings (names and loan details; the salary day is fixed after setup). */
+    suspend fun saveProfile(profile: Profile) {
+        Plan.profile = profile
+        dao.putSetting(SettingEntity(ProfileJson.SETTING_KEY, ProfileJson.encode(profile)))
+        onChanged()
+    }
+
+    // Snapshots used by notifications and background work. planNow() also makes sure the profile is loaded.
+    suspend fun planNow(): PlanEngine {
+        profileNow()
+        return PlanEngine(decodePlan(dao.setting(PlanJson.SETTING_KEY)))
+    }
     suspend fun reminderPrefsNow(): ReminderPrefs = ReminderPrefsJson.decode(dao.setting(ReminderPrefsJson.SETTING_KEY))
     suspend fun entriesNow(): List<EntryWithTxns> = dao.entries().map { it.toDomain() }
     suspend fun doneNow(): Set<String> = dao.done().map { it.itemId }.toSet()
@@ -188,6 +238,7 @@ class MoneyRepository(
         goals = dao.goals(),
         plan = dao.setting(PlanJson.SETTING_KEY),
         reminders = dao.setting(ReminderPrefsJson.SETTING_KEY),
+        profile = dao.setting(ProfileJson.SETTING_KEY),
     )
 
     suspend fun replaceAll(data: BackupData) {
@@ -207,6 +258,10 @@ class MoneyRepository(
             data.goals.forEach { dao.upsertGoal(it) }
             data.plan?.let { dao.putSetting(SettingEntity(PlanJson.SETTING_KEY, it)) }
             data.reminders?.let { dao.putSetting(SettingEntity(ReminderPrefsJson.SETTING_KEY, it)) }
+            // Backups made before profiles existed come from the original setup.
+            val profile = data.profile?.let(ProfileJson::decode)?.copy(setupDone = true) ?: Profile()
+            dao.putSetting(SettingEntity(ProfileJson.SETTING_KEY, ProfileJson.encode(profile)))
+            Plan.profile = profile
         }
         onChanged()
     }
@@ -223,4 +278,6 @@ data class BackupData(
     val plan: String? = null,
     /** Reminder settings JSON, or null to keep the current ones. */
     val reminders: String? = null,
+    /** Profile JSON; null for backups made before profiles existed. */
+    val profile: String? = null,
 )

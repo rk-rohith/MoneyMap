@@ -6,11 +6,20 @@ enum class Direction { LENT, BORROWED }
 
 enum class TxnType { GIVEN, RECEIVED, BORROWED, REPAID }
 
-enum class ReturnPod(val label: String) {
-    JUPITER_MAIN("Jupiter main"),
-    EMERGENCY("Emergency pod"),
-    SRI_LANKA("Sri Lanka pod"),
-    DEBT("Debt pod"),
+/** Names are stored in the database; labels follow the profile (SRI_LANKA is the profile's goal pod). */
+enum class ReturnPod {
+    JUPITER_MAIN,
+    EMERGENCY,
+    SRI_LANKA,
+    DEBT;
+
+    val label: String
+        get() = when (this) {
+            JUPITER_MAIN -> Plan.SPEND_MAIN
+            EMERGENCY -> Plan.EMERGENCY_POD
+            SRI_LANKA -> Plan.profile.goalPod
+            DEBT -> Plan.DEBT_POD
+        }
 }
 
 enum class EntryStatus(val label: String) {

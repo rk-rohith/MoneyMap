@@ -38,7 +38,7 @@ data class GoalProgress(
 }
 
 object Pods {
-    val DEFAULT_PODS = listOf(Plan.EMERGENCY_POD, Plan.DEBT_POD, ReturnPod.SRI_LANKA.label)
+    val DEFAULT_PODS: List<String> get() = listOf(Plan.EMERGENCY_POD, Plan.DEBT_POD, ReturnPod.SRI_LANKA.label)
 
     fun linkForTxn(txnId: Long) = "txn:$txnId"
 
@@ -56,7 +56,7 @@ object Pods {
         else -> emptyList()
     }
 
-    /** Money coming back from someone goes into its return pod (Jupiter main is not a pod). */
+    /** Money coming back from someone goes into its return pod (the spending account's main balance is not a pod). */
     fun moveForReturn(pod: ReturnPod, amount: Long, date: LocalDate, person: String, txnId: Long): PodMove? =
         if (pod == ReturnPod.JUPITER_MAIN || amount <= 0) null
         else PodMove(pod = pod.label, amount = amount, date = date, note = "Returned by $person", linkKey = linkForTxn(txnId))
