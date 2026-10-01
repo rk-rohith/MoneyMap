@@ -13,6 +13,12 @@ import com.moneymap.core.PlanEngine
 import com.moneymap.core.PlanSettings
 import com.moneymap.core.PodMove
 import com.moneymap.core.Profile
+import com.moneymap.core.Investment
+import com.moneymap.core.Loan
+import com.moneymap.core.NetWorth
+import com.moneymap.core.NetWorthCalc
+import com.moneymap.core.NetWorthPoint
+import com.moneymap.core.Ledger
 import com.moneymap.core.ReminderPrefs
 import com.moneymap.core.Pods
 import com.moneymap.core.ReturnPod
@@ -47,6 +53,42 @@ class MoneyRepository(
     /** Null until [init] has stored one; the UI waits for it. Every emission also updates [Plan.profile]. */
     val profile: Flow<Profile?> = dao.observeSetting(ProfileJson.SETTING_KEY).map { text ->
         ProfileJson.decode(text)?.also { Plan.profile = it }
+    }
+
+    val loans: Flow<List<Loan>> = dao.observeSetting(WealthJson.LOANS_KEY).map { WealthJson.decodeLoans(it) }
+    val investments: Flow<List<Investment>> =
+        dao.observeSetting(WealthJson.INVESTMENTS_KEY).map { WealthJson.decodeInvestments(it) }
+    val netWorthHistory: Flow<List<NetWorthPoint>> =
+        dao.observeSetting(WealthJson.NET_WORTH_KEY).map { WealthJson.decodeHistory(it) }
+
+    suspend fun loansNow(): List<Loan> = WealthJson.decodeLoans(dao.setting(WealthJson.LOANS_KEY))
+    suspend fun investmentsNow(): List<Investment> = WealthJson.decodeInvestments(dao.setting(WealthJson.INVESTMENTS_KEY))
+
+    suspend fun saveLoans(list: List<Loan>) {
+        dao.putSetting(SettingEntity(WealthJson.LOANS_KEY, WealthJson.encodeLoans(list)))
+        recordNetWorth()
+    }
+
+    suspend fun saveInvestments(list: List<Investment>) {
+        dao.putSetting(SettingEntity(WealthJson.INVESTMENTS_KEY, WealthJson.encodeInvestments(list)))
+        recordNetWorth()
+    }
+
+    /** Pods + money owed to me + investments − money I owe − loan balances, as of today. */
+    suspend fun netWorthNow(): NetWorth {
+        val engine = planNow()
+        val today = LocalDate.now()
+        val extra = Pods.planPods(engine, Plan.cycleStartFor(today)) + goalsNow().map { it.pod }
+        return NetWorthCalc.compute(Pods.balances(podMovesNow(), extra), Ledger.summary(entriesNow()),
+            investmentsNow(), loansNow(), today)
+    }
+
+    /** Keeps this month's point in the net-worth history up to date. */
+    suspend fun recordNetWorth() {
+        val total = netWorthNow().total
+        val history = WealthJson.decodeHistory(dao.setting(WealthJson.NET_WORTH_KEY))
+        dao.putSetting(SettingEntity(WealthJson.NET_WORTH_KEY,
+            WealthJson.encodeHistory(NetWorthCalc.record(history, LocalDate.now(), total))))
     }
 
     val categoryBudgets: Flow<Map<ExpenseCategory, Long>> =
@@ -295,6 +337,7 @@ class MoneyRepository(
         reminders = dao.setting(ReminderPrefsJson.SETTING_KEY),
         profile = dao.setting(ProfileJson.SETTING_KEY),
         categoryBudgets = dao.setting(CategoryBudgetsJson.SETTING_KEY),
+        extras = WealthJson.BACKUP_KEYS.mapNotNull { k -> dao.setting(k)?.let { k to it } }.toMap(),
     )
 
     suspend fun replaceAll(data: BackupData) {
@@ -319,6 +362,7 @@ class MoneyRepository(
             dao.putSetting(SettingEntity(ProfileJson.SETTING_KEY, ProfileJson.encode(profile)))
             Plan.profile = profile
             data.categoryBudgets?.let { dao.putSetting(SettingEntity(CategoryBudgetsJson.SETTING_KEY, it)) }
+            data.extras.forEach { (k, v) -> dao.putSetting(SettingEntity(k, v)) }
         }
         onChanged()
     }
@@ -339,4 +383,6 @@ data class BackupData(
     val profile: String? = null,
     /** Category budgets JSON, or null to keep the current ones. */
     val categoryBudgets: String? = null,
+    /** Other settings by key (loans, investments, net-worth history…); missing keys keep the current values. */
+    val extras: Map<String, String> = emptyMap(),
 )

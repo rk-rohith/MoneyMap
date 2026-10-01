@@ -34,6 +34,7 @@ class MoneyMapApp : Application() {
         appScope.launch {
             rescheduleRequests.debounce(500).collect {
                 runCatching { AlarmScheduler.rescheduleAll(this@MoneyMapApp, repository) }
+                runCatching { repository.recordNetWorth() }
             }
         }
         appScope.launch {

@@ -68,6 +68,10 @@ fun MoneyMapRoot(vm: MainViewModel, onLockChanged: (Boolean) -> Boolean = { true
     var settingsOpen by rememberSaveable { mutableStateOf(false) }
     var searchOpen by rememberSaveable { mutableStateOf(false) }
     var reportsOpen by rememberSaveable { mutableStateOf(false) }
+    var wealthOpen by rememberSaveable { mutableStateOf(false) }
+    val loans by vm.loans.collectAsStateWithLifecycle()
+    val investments by vm.investments.collectAsStateWithLifecycle()
+    val netWorthHistory by vm.netWorthHistory.collectAsStateWithLifecycle()
     val categoryBudgets by vm.categoryBudgets.collectAsStateWithLifecycle()
     val dynamicColor by vm.dynamicColor.collectAsStateWithLifecycle()
     val quickAdd by vm.quickAdd.collectAsStateWithLifecycle()
@@ -230,6 +234,26 @@ fun MoneyMapRoot(vm: MainViewModel, onLockChanged: (Boolean) -> Boolean = { true
         return
     }
 
+    if (wealthOpen) {
+        BackHandler { wealthOpen = false }
+        val cycle = com.moneymap.core.Plan.cycleStartFor(today)
+        val balances = com.moneymap.core.Pods.balances(podMoves,
+            com.moneymap.core.Pods.planPods(plan, cycle) + goals.map { it.pod })
+        val netWorth = com.moneymap.core.NetWorthCalc.compute(balances, com.moneymap.core.Ledger.summary(entries),
+            investments, loans, today)
+        WealthScreen(
+            today = today, netWorth = netWorth, history = netWorthHistory, investments = investments, loans = loans,
+            snackbar = snackbar,
+            onBack = { wealthOpen = false },
+            onSaveInvestment = { vm.saveInvestment(it) },
+            onDeleteInvestment = { vm.deleteInvestment(it) },
+            onSaveLoan = { vm.saveLoan(it) },
+            onDeleteLoan = { vm.deleteLoan(it) },
+            onOpened = { vm.refreshNetWorth() },
+        )
+        return
+    }
+
     if (reportsOpen) {
         BackHandler { reportsOpen = false }
         ReportsScreen(
@@ -294,6 +318,9 @@ fun MoneyMapRoot(vm: MainViewModel, onLockChanged: (Boolean) -> Boolean = { true
                     DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                         DropdownMenuItem(text = { Text("Settings & plan") }, onClick = {
                             menuOpen = false; settingsOpen = true
+                        })
+                        DropdownMenuItem(text = { Text("Net worth, investments & loans") }, onClick = {
+                            menuOpen = false; wealthOpen = true
                         })
                         DropdownMenuItem(text = { Text("Reports & budgets") }, onClick = {
                             menuOpen = false; reportsOpen = true

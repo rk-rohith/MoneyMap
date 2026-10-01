@@ -69,6 +69,39 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** Null while loading; [Profile.setupDone] false shows the first-run setup. */
     val profile: StateFlow<Profile?> =
         repo.profile.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+    val loans: StateFlow<List<com.moneymap.core.Loan>> =
+        repo.loans.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    val investments: StateFlow<List<com.moneymap.core.Investment>> =
+        repo.investments.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    val netWorthHistory: StateFlow<List<com.moneymap.core.NetWorthPoint>> =
+        repo.netWorthHistory.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    fun saveLoan(loan: com.moneymap.core.Loan) = viewModelScope.launch {
+        repo.saveLoans(repo.loansNow().filter { it.id != loan.id } + loan)
+        say("Loan saved")
+    }
+
+    fun deleteLoan(id: String) = viewModelScope.launch {
+        val before = repo.loansNow()
+        repo.saveLoans(before.filter { it.id != id })
+        say("Loan removed", "Undo") { viewModelScope.launch { repo.saveLoans(before) } }
+    }
+
+    fun saveInvestment(inv: com.moneymap.core.Investment) = viewModelScope.launch {
+        val list = repo.investmentsNow()
+        val i = list.indexOfFirst { it.id == inv.id }
+        repo.saveInvestments(if (i < 0) list + inv else list.toMutableList().also { it[i] = inv })
+        say("Saved ${inv.name}")
+    }
+
+    fun deleteInvestment(id: String) = viewModelScope.launch {
+        val before = repo.investmentsNow()
+        repo.saveInvestments(before.filter { it.id != id })
+        say("Investment removed", "Undo") { viewModelScope.launch { repo.saveInvestments(before) } }
+    }
+
+    fun refreshNetWorth() = viewModelScope.launch { runCatching { repo.recordNetWorth() } }
+
     val categoryBudgets: StateFlow<Map<ExpenseCategory, Long>> =
         repo.categoryBudgets.stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
 

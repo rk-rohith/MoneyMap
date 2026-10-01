@@ -88,3 +88,22 @@ class PlanAndProfileJsonTest {
         org.junit.Assert.assertNull(ProfileJson.decode(null))
     }
 }
+
+class WealthJsonTest {
+    @org.junit.Test
+    fun roundTrips() {
+        val d = java.time.LocalDate.of(2026, 10, 1)
+        val loans = listOf(com.moneymap.core.Loan("c", "Car", 500_000, 9.25, 15_900, d,
+            listOf(com.moneymap.core.Prepayment(d.plusMonths(3), 50_000))))
+        org.junit.Assert.assertEquals(loans, WealthJson.decodeLoans(WealthJson.encodeLoans(loans)))
+        val inv = listOf(
+            com.moneymap.core.Investment("1", "Index", com.moneymap.core.InvestmentKind.SIP, 5_000, 5,
+                listOf(com.moneymap.core.InvestmentTxn(d, 5_000, 41.25)), null, 121.5, d),
+            com.moneymap.core.Investment("2", "FD", com.moneymap.core.InvestmentKind.FD, currentValue = 103_000),
+        )
+        org.junit.Assert.assertEquals(inv, WealthJson.decodeInvestments(WealthJson.encodeInvestments(inv)))
+        val h = listOf(com.moneymap.core.NetWorthPoint(d, 123_456))
+        org.junit.Assert.assertEquals(h, WealthJson.decodeHistory(WealthJson.encodeHistory(h)))
+        org.junit.Assert.assertEquals(emptyList<com.moneymap.core.Loan>(), WealthJson.decodeLoans("garbage"))
+    }
+}

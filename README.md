@@ -33,6 +33,10 @@ CI (`.github/workflows/build-apk.yml`) runs tests, builds, lints and uploads the
   they repeat every month with "Add to plan".
 - **Receipts**: tap an expense to attach a photo from the gallery or camera (stored on the phone, scaled down;
   not included in JSON backups).
+- **Net worth, investments & loans** (⋮ menu): net worth (pods + money owed to you + investments − money you owe −
+  loan balances) with a month-by-month trend; SIPs, FDs, stocks, gold and PPF with invested vs current value (units ×
+  NAV or a typed value) and a "record this month's SIP" button; a loan planner with the full EMI schedule, payoff
+  date, interest left, and what a prepayment would save.
 - **People**: money lent and borrowed, partial returns, reminders on due dates.
 - **Save**: pod balances (filled by ticking the salary-day routine, emptied by debt/pod-move ticks, topped up by returns) and goals with "save ₹X per cycle".
 - **Home-screen widgets**: a summary widget (next payment, what's left to spend, what others owe, + Expense) and a
