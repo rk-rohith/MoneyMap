@@ -114,17 +114,25 @@ fun MoneyMapRoot(vm: MainViewModel, onLockChanged: (Boolean) -> Boolean = { true
         if (uri != null) vm.setBackupFolder(uri)
     }
     LaunchedEffect(Unit) {
-        vm.exportUris.collect { uris ->
-            val send = Intent(Intent.ACTION_SEND_MULTIPLE).apply {
+        vm.exportUris.collect { request ->
+            val uris = request.uris
+            val send = Intent(if (uris.size == 1) Intent.ACTION_SEND else Intent.ACTION_SEND_MULTIPLE).apply {
                 type = "*/*"
-                putParcelableArrayListExtra(Intent.EXTRA_STREAM, ArrayList(uris))
+                if (uris.size == 1) putExtra(Intent.EXTRA_STREAM, uris.first())
+                else putParcelableArrayListExtra(Intent.EXTRA_STREAM, ArrayList(uris))
                 clipData = ClipData.newRawUri("Money map export", uris.first()).also { clip ->
                     uris.drop(1).forEach { clip.addItem(ClipData.Item(it)) }
                 }
                 putExtra(Intent.EXTRA_SUBJECT, "Money map backup")
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
-            context.startActivity(Intent.createChooser(send, "Share backup"))
+            val direct = request.targetPackage?.let { pkg ->
+                runCatching { context.startActivity(Intent(send).setPackage(pkg)) }.isSuccess
+            } ?: false
+            if (!direct) {
+                val title = if (request.targetPackage != null) "Drive isn't installed: save the backup to…" else "Share backup"
+                context.startActivity(Intent.createChooser(send, title))
+            }
         }
     }
     LaunchedEffect(openRequest) {
@@ -199,6 +207,7 @@ fun MoneyMapRoot(vm: MainViewModel, onLockChanged: (Boolean) -> Boolean = { true
             onBackupNow = { vm.backupNow() },
             onBackupOff = { vm.turnOffBackup() },
             onExport = { vm.export() },
+            onExportToDrive = { vm.export(toDrive = true) },
             onImport = { confirmImport = true },
             onTestNotification = { vm.sendTestNotification() },
             reminderPrefs = reminderPrefs,

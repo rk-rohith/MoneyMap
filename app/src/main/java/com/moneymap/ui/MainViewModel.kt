@@ -40,6 +40,11 @@ import java.time.LocalDate
 /** Something the UI should open, e.g. from a notification tap. */
 data class OpenRequest(val entryId: Long?, val record: Boolean, val tab: Int?)
 
+/** Files to share; [targetPackage] picks one app (e.g. Google Drive) instead of the share sheet. */
+data class ExportRequest(val uris: List<Uri>, val targetPackage: String?)
+
+const val DRIVE_PACKAGE = "com.google.android.apps.docs"
+
 /** Import of [uri] needs a password; [wrong] after a failed attempt. */
 data class PasswordPrompt(val uri: Uri, val wrong: Boolean)
 
@@ -169,8 +174,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _openRequest = MutableStateFlow<OpenRequest?>(null)
     val openRequest: StateFlow<OpenRequest?> = _openRequest.asStateFlow()
 
-    private val _exportUris = MutableSharedFlow<List<Uri>>(extraBufferCapacity = 1)
-    val exportUris: SharedFlow<List<Uri>> = _exportUris
+    private val _exportUris = MutableSharedFlow<ExportRequest>(extraBufferCapacity = 1)
+    val exportUris: SharedFlow<ExportRequest> = _exportUris
 
     private val _backup = MutableStateFlow(readBackupState())
     val backup: StateFlow<BackupState> = _backup.asStateFlow()
@@ -298,9 +303,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun deleteGoal(id: Long) = viewModelScope.launch { repo.deleteGoal(id) }
 
-    fun export() = viewModelScope.launch {
+    /** Shares the export; [toDrive] sends it straight to the Google Drive app's upload screen. */
+    fun export(toDrive: Boolean = false) = viewModelScope.launch {
         runCatching { Backup.export(getApplication(), repo) }
-            .onSuccess { _exportUris.tryEmit(it) }
+            .onSuccess { uris ->
+                // Drive gets only the backup file (the first one), not the readable CSVs.
+                _exportUris.tryEmit(if (toDrive) ExportRequest(uris.take(1), DRIVE_PACKAGE) else ExportRequest(uris, null))
+            }
             .onFailure { say("Export failed: ${it.message}") }
     }
 

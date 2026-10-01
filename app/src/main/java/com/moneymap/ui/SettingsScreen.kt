@@ -89,6 +89,7 @@ fun SettingsScreen(
     onExport: () -> Unit,
     onImport: () -> Unit,
     onTestNotification: () -> Unit,
+    onExportToDrive: () -> Unit = {},
     reminderPrefs: ReminderPrefs = ReminderPrefs(),
     onSaveReminders: (ReminderPrefs) -> Unit = {},
     lockEnabled: Boolean = false,
@@ -167,6 +168,9 @@ fun SettingsScreen(
                         FilledTonalButton(onClick = onExport) { Text("Export") }
                         OutlinedButton(onClick = onImport) { Text("Import…") }
                     }
+                    OutlinedButton(onClick = onExportToDrive) { Text("Save backup to Google Drive") }
+                    Text("Opens Drive's upload screen with the backup file. Set a backup password first to keep it " +
+                        "encrypted in Drive.", style = MaterialTheme.typography.bodySmall)
                 }
             }
 
