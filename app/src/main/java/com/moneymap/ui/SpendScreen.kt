@@ -53,6 +53,9 @@ import com.moneymap.core.parseAmount
 import com.moneymap.core.short
 import com.moneymap.core.withDay
 import com.moneymap.data.Expense
+import android.graphics.Bitmap
+import android.net.Uri
+import androidx.compose.foundation.clickable
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 
@@ -69,7 +72,13 @@ fun SpendScreen(
     suggestions: List<SuggestedExpense> = emptyList(),
     onAcceptSuggestion: (SuggestedExpense, String, ExpenseCategory) -> Unit = { _, _, _ -> },
     onDismissSuggestion: (SuggestedExpense) -> Unit = {},
+    receiptIds: Set<Long> = emptySet(),
+    loadReceipt: suspend (Long) -> Bitmap? = { null },
+    cameraUri: () -> Uri = { Uri.EMPTY },
+    onAttachReceipt: (Long, Uri) -> Unit = { _, _ -> },
+    onRemoveReceipt: (Long) -> Unit = {},
 ) {
+    var openExpense by rememberSaveable { mutableStateOf<Long?>(null) }
     var offset by rememberSaveable { mutableLongStateOf(0L) }
     val current = offset == 0L
     val cycle = Plan.cycleStartFor(today).plusMonths(offset)
@@ -215,15 +224,23 @@ fun SpendScreen(
             item { Text("Nothing logged.", style = MaterialTheme.typography.bodyMedium) }
         }
         items(inCycle, key = { it.id }) { e ->
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().clickable { openExpense = e.id }, verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text(e.note.ifBlank { e.category.label }, style = MaterialTheme.typography.bodyLarge)
-                    Text("${e.date.withDay()} · ${e.category.label}", style = MaterialTheme.typography.bodySmall)
+                    Text("${e.date.withDay()} · ${e.category.label}" + if (e.id in receiptIds) " · receipt" else "",
+                        style = MaterialTheme.typography.bodySmall)
                 }
                 Text(formatInr(e.amount), style = MaterialTheme.typography.titleSmall)
                 IconButton(onClick = { onDelete(e) }) { Icon(Icons.Filled.Delete, contentDescription = "Delete") }
             }
         }
         item { Spacer(Modifier.height(24.dp)) }
+    }
+    openExpense?.let { id -> expenses.firstOrNull { it.id == id } }?.let { e ->
+        ExpenseDialog(
+            expense = e, hasReceipt = e.id in receiptIds, loadReceipt = loadReceipt, cameraUri = cameraUri,
+            onAttach = onAttachReceipt, onRemoveReceipt = onRemoveReceipt, onDelete = onDelete,
+            onDismiss = { openExpense = null },
+        )
     }
 }

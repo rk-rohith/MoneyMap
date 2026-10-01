@@ -76,6 +76,7 @@ fun MoneyMapRoot(vm: MainViewModel, onLockChanged: (Boolean) -> Boolean = { true
     val lockEnabled by vm.lockEnabled.collectAsStateWithLifecycle()
     val passwordPrompt by vm.passwordPrompt.collectAsStateWithLifecycle()
     val suggestions by vm.suggestions.collectAsStateWithLifecycle()
+    val receiptIds by vm.receiptIds.collectAsStateWithLifecycle()
     val profile by vm.profile.collectAsStateWithLifecycle()
 
     var tab by rememberSaveable { mutableIntStateOf(0) }
@@ -322,6 +323,11 @@ fun MoneyMapRoot(vm: MainViewModel, onLockChanged: (Boolean) -> Boolean = { true
                 suggestions = suggestions,
                 onAcceptSuggestion = { s, note, category -> vm.acceptSuggestion(s, note, category) },
                 onDismissSuggestion = { vm.dismissSuggestion(it) },
+                receiptIds = receiptIds,
+                loadReceipt = { vm.loadReceipt(it) },
+                cameraUri = { vm.receiptCameraUri() },
+                onAttachReceipt = { id, uri -> vm.attachReceipt(id, uri) },
+                onRemoveReceipt = { vm.removeReceipt(it) },
             )
             3 -> SaveScreen(
                 today = today, plan = plan, podMoves = podMoves, goals = goals, modifier = mod,

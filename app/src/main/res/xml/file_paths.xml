@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths>
     <cache-path name="exports" path="exports/" />
+    <!-- Camera writes new receipt photos here before they are moved into app storage. -->
+    <cache-path name="camera" path="camera/" />
 </paths>

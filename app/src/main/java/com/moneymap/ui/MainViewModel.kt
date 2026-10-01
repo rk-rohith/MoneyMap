@@ -24,6 +24,7 @@ import com.moneymap.data.AutoBackup
 import com.moneymap.data.Backup
 import com.moneymap.data.BackupPassword
 import com.moneymap.data.Expense
+import com.moneymap.data.Receipts
 import com.moneymap.data.UiPrefs
 import com.moneymap.notify.AlarmReceiver
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -94,6 +95,26 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         repo.savePlan(engine.settings.withVersion(cycle, cfg.copy(items = cfg.items + item)))
         say("Added ${guess.title} to your plan from ${com.moneymap.core.Plan.cycleLabel(cycle)}")
     }
+
+    private val _receiptIds = MutableStateFlow(Receipts.ids(app))
+    /** Expenses that have a receipt photo. */
+    val receiptIds: StateFlow<Set<Long>> = _receiptIds.asStateFlow()
+
+    fun attachReceipt(expenseId: Long, uri: Uri) = viewModelScope.launch {
+        runCatching { Receipts.save(getApplication(), expenseId, uri) }
+            .onSuccess { say("Receipt saved") }
+            .onFailure { say("Could not save the photo: ${it.message}") }
+        _receiptIds.value = Receipts.ids(getApplication())
+    }
+
+    fun removeReceipt(expenseId: Long) {
+        Receipts.remove(getApplication(), expenseId)
+        _receiptIds.value = Receipts.ids(getApplication())
+    }
+
+    suspend fun loadReceipt(expenseId: Long) = Receipts.load(getApplication(), expenseId)
+
+    fun receiptCameraUri(): Uri = Receipts.cameraUri(getApplication())
 
     val suggestions: StateFlow<List<SuggestedExpense>> =
         repo.suggestions.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())

@@ -110,6 +110,8 @@ class MoneyRepository(
         return p
     }
 
+    suspend fun expenseIds(): Set<Long> = dao.expenses().map { it.id }.toSet()
+
     suspend fun init() {
         profileNow()
         onChanged()

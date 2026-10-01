@@ -38,6 +38,8 @@ class MoneyMapApp : Application() {
         }
         appScope.launch {
             repository.init()
+            // Receipt photos of expenses deleted earlier (kept until now so Undo could bring them back).
+            runCatching { com.moneymap.data.Receipts.cleanUp(this@MoneyMapApp, repository.expenseIds()) }
             AlarmScheduler.rescheduleAll(this@MoneyMapApp, repository)
             AutoBackup.runIfDue(this@MoneyMapApp, repository)
         }
