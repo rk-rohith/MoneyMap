@@ -57,6 +57,22 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
+    }
+
+    // "standard" installs anywhere. "full" adds the bank/UPI notification reader, which Google Play Protect blocks
+    // when the APK is installed from a browser or file manager (install it with Play Protect paused, or adb install).
+    flavorDimensions += "features"
+    productFlavors {
+        create("standard") {
+            dimension = "features"
+            buildConfigField("boolean", "NOTIFICATION_READER", "false")
+        }
+        create("full") {
+            dimension = "features"
+            versionNameSuffix = "-full"
+            buildConfigField("boolean", "NOTIFICATION_READER", "true")
+        }
     }
     lint {
         abortOnError = true

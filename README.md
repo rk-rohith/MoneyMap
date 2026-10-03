@@ -5,13 +5,22 @@ Personal finance reminder app for Android (Kotlin, Jetpack Compose, Material 3, 
 ## Build
 
 ```sh
-./gradlew assembleDebug        # -> app/build/outputs/apk/debug/app-debug.apk
-./gradlew test                 # plan, ledger and reminder unit tests
-./gradlew lint
+./gradlew assembleStandardDebug   # -> app/build/outputs/apk/standard/debug/app-standard-debug.apk
+./gradlew assembleFullDebug       # -> app/build/outputs/apk/full/debug/app-full-debug.apk
+./gradlew testStandardDebugUnitTest
+./gradlew lintStandardDebug
 ```
 
 Requires JDK 17 and an Android SDK with platform 35 (`local.properties` → `sdk.dir=...` or `ANDROID_HOME`).
 CI (`.github/workflows/build-apk.yml`) runs tests, builds, lints and uploads the APK as the `moneymap-debug-apk` artifact.
+
+### Standard and full builds
+
+- **standard** (`moneymap-debug-apk` in CI): everything except reading other apps' notifications. Installs normally.
+- **full** (`moneymap-full-debug-apk`): adds "Expenses from notifications" and automatic card bills. Google Play
+  Protect blocks apps that read notifications when they're installed from a browser or file manager ("App blocked to
+  protect your device"), so install it with `adb install`, or pause Play Protect (Play Store → profile → Play Protect →
+  settings) while installing. Both builds use the same package and key, so either installs over the other with data kept.
 
 ## Features
 
@@ -24,9 +33,9 @@ CI (`.github/workflows/build-apk.yml`) runs tests, builds, lints and uploads the
 - **Uneven income**: a different salary for a single cycle, dated extra income (bonus, refund) that tops up that
   cycle's emergency pod, and an option to move salary day to the Friday before when it falls on a weekend.
 - **Month**: overdue alerts, next-up card, cycle navigation, salary split, payment checklist with undo.
-- **Expenses from notifications** (optional, Settings): with notification access, debits from bank, card and UPI
+- **Expenses from notifications** (full build only, Settings): with notification access, debits from bank, card and UPI
   notifications appear on Spend as suggestions to add or ignore (duplicates from bank + UPI app are merged).
-- **Card bills**: credit card statement notifications (total due, minimum, due date) become "Pay card bill" items
+- **Card bills**: (full build) credit card statement notifications (total due, minimum, due date) become "Pay card bill" items
   on Month with the usual reminders; manage or add them in Settings → Credit card bills.
 - **Spend**: log expenses by category, see where the budget went, browse past cycles, "paid for someone" → People, "split the bill" (your share is spending, everyone
   else's equal share becomes money they owe you).
@@ -89,7 +98,7 @@ Switching an installed app from the debug key to a release key needs one reinsta
 ## Install on a phone
 
 ```sh
-adb install -r app/build/outputs/apk/debug/app-debug.apk
+adb install -r app/build/outputs/apk/standard/debug/app-standard-debug.apk
 adb shell am start -n com.moneymap/.MainActivity --ez test_notification true   # posts a test reminder
 ```
 

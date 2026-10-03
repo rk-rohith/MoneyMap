@@ -179,7 +179,7 @@ fun SettingsScreen(
 
             BackupPasswordCard(backup.passwordSet, onBackupPassword)
 
-            NotificationAccessCard()
+            if (com.moneymap.BuildConfig.NOTIFICATION_READER) NotificationAccessCard()
 
             if (dynamicColorSupported) {
                 OutlinedCard(Modifier.fillMaxWidth()) {
@@ -220,8 +220,10 @@ private fun CardBillsCard(today: LocalDate, bills: List<com.moneymap.core.CardBi
                     Text("Add")
                 }
             }
-            Text("Statements from card notifications are added here and show on Month with reminders (needs " +
-                "\"Expenses from notifications\" on). They're reminders only: the spends were already logged.",
+            Text(
+                (if (com.moneymap.BuildConfig.NOTIFICATION_READER) "Statements from card notifications are added here " +
+                    "automatically (needs \"Expenses from notifications\" on). " else "Add each statement's total and due date. ") +
+                    "They show on Month with reminders, as reminders only: the spends were already logged.",
                 style = MaterialTheme.typography.bodySmall)
             upcoming.forEach { b ->
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {

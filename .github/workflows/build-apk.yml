@@ -23,13 +23,13 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
 
       - name: Unit tests
-        run: ./gradlew --no-daemon testDebugUnitTest
+        run: ./gradlew --no-daemon testStandardDebugUnitTest
 
       - name: Build debug APK
-        run: ./gradlew --no-daemon assembleDebug
+        run: ./gradlew --no-daemon assembleStandardDebug assembleFullDebug
 
       - name: Lint
-        run: ./gradlew --no-daemon lintDebug
+        run: ./gradlew --no-daemon lintStandardDebug lintFullDebug
 
       # Room writes app/schemas/<db>/<version>.json during the build; a changed or new file means the schema
       # history wasn't committed. The file is printed so it can be copied from the log.
@@ -58,22 +58,29 @@ jobs:
             echo "$MONEYMAP_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
             export MONEYMAP_KEYSTORE="$RUNNER_TEMP/release.jks"
           fi
-          ./gradlew --no-daemon assembleRelease
+          ./gradlew --no-daemon assembleStandardRelease assembleFullRelease
 
-      - name: Upload release APK
+      - name: Upload release APKs
         uses: actions/upload-artifact@v4
         with:
           name: moneymap-release-apk
-          path: app/build/outputs/apk/release/*.apk
+          path: app/build/outputs/apk/*/release/*.apk
 
+      # Standard: installs normally. Full: adds the notification reader (Play Protect blocks it when sideloaded).
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: moneymap-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: app/build/outputs/apk/standard/debug/app-standard-debug.apk
+
+      - name: Upload full APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: moneymap-full-debug-apk
+          path: app/build/outputs/apk/full/debug/app-full-debug.apk
 
       - name: Screenshots
-        run: ./gradlew --no-daemon testDebugUnitTest -Pscreenshots
+        run: ./gradlew --no-daemon testStandardDebugUnitTest -Pscreenshots
 
       - name: Upload screenshots
         uses: actions/upload-artifact@v4
