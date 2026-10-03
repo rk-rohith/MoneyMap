@@ -71,7 +71,7 @@ CI (`.github/workflows/build-apk.yml`) runs tests, builds, lints and uploads the
 ## Previewing changes
 
 CI renders every screen with sample data (`ScreenshotTest`) and uploads them as the `moneymap-screenshots`
-artifact. Locally: `./gradlew testDebugUnitTest -Pscreenshots` → `app/build/screenshots/`.
+artifact. Locally: `./gradlew testStandardDebugUnitTest -Pscreenshots` → `app/build/screenshots/`.
 
 ## Updating the app
 
